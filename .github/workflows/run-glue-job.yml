@@ -1,0 +1,72 @@
+name: Run Glue Job
+
+on:
+  workflow_call:
+    inputs:
+      aws_region:
+        required: true
+        type: string
+      role_arn:
+        required: true
+        type: string
+      glue_job_name:
+        required: true
+        type: string
+      input_path:
+        required: true
+        type: string
+      output_path:
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run-glue-job:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.role_arn }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Start Glue job
+        id: start_job
+        run: |
+          JOB_RUN_ID=$(aws glue start-job-run \
+            --job-name "${{ inputs.glue_job_name }}" \
+            --arguments '{
+              "--INPUT_PATH": "${{ inputs.input_path }}",
+              "--OUTPUT_PATH": "${{ inputs.output_path }}"
+            }' \
+            --query 'JobRunId' \
+            --output text)
+
+          echo "job_run_id=$JOB_RUN_ID" >> $GITHUB_OUTPUT
+          echo "Started Glue job: $JOB_RUN_ID"
+
+      - name: Wait for Glue job completion
+        run: |
+          JOB_RUN_ID="${{ steps.start_job.outputs.job_run_id }}"
+
+          while true; do
+            STATUS=$(aws glue get-job-run \
+              --job-name "${{ inputs.glue_job_name }}" \
+              --run-id "$JOB_RUN_ID" \
+              --query 'JobRun.JobRunState' \
+              --output text)
+
+            echo "Current status: $STATUS"
+
+            if [ "$STATUS" = "SUCCEEDED" ]; then
+              exit 0
+            elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "STOPPED" ] || [ "$STATUS" = "TIMEOUT" ]; then
+              exit 1
+            fi
+
+            sleep 30
+          done
