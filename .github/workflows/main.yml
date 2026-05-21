@@ -1,0 +1,27 @@
+name: Glue Validation Pipeline
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  create-glue-job:
+    uses: ./.github/workflows/create-glue-job.yml
+    with:
+      aws_region: us-east-1
+      role_arn: arn:aws:iam::493272324412:role/glue-etl-mlops
+      glue_job_name: data-validation-glue-job
+      script_s3_path: s3://mlops-pipeline-gowtham/scripts/data_validation.py
+
+  run-glue-job:
+    needs: create-glue-job
+    uses: ./.github/workflows/run-glue-job.yml
+    with:
+      aws_region: us-east-1
+      role_arn: arn:aws:iam::493272324412:role/glue-etl-mlops
+      glue_job_name: data-validation-glue-job
+      input_path: s3://mlops-pipeline-gowtham/raw/validation/
+      output_path: s3://mlops-pipeline-gowtham/output/etl/
