@@ -3,38 +3,22 @@ name: Main Glue Pipeline
 on:
   workflow_dispatch:
 
-env:
-  REDSHIFT_CLUSTER_NAME: my-redshift-cluster
-
-  REDSHIFT_DATABASE_NAME: salesdb
-
-  GLUE_JOB_NAME: sales-glue-job
-
-  S3_BUCKET_NAME: glue-etl-mlops-pipeline
-
-  IAM_ROLE_ARN: arn:aws:iam::061578311583:role/glue-etl
-
 jobs:
-
   create-resources:
     uses: ./.github/workflows/create-resources.yml
 
     with:
-      redshift_cluster_name: my-redshift-cluster
-
+      redshift_namespace_name: sales-namespace
+      redshift_workgroup_name: sales-workgroup
       redshift_database_name: salesdb
-
       glue_job_name: sales-glue-job
-
       s3_bucket_name: glue-etl-mlops-pipeline
-
       iam_role_arn: arn:aws:iam::061578311583:role/glue-etl
 
     secrets: inherit
 
   run-glue-job:
     needs: create-resources
-
     uses: ./.github/workflows/run-glue-job.yml
 
     with:
