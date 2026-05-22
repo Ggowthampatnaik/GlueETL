@@ -10,7 +10,7 @@ env:
 
   GLUE_JOB_NAME: sales-glue-job
 
-  S3_BUCKET_NAME: glue-etl-061578311583-gowtham-dev-001
+  S3_BUCKET_NAME: glue-etl-mlops-pipeline
 
   IAM_ROLE_ARN: arn:aws:iam::061578311583:role/glue-etl
 
@@ -26,7 +26,7 @@ jobs:
 
       glue_job_name: sales-glue-job
 
-      s3_bucket_name: my-sales-bucket
+      s3_bucket_name: glue-etl-mlops-pipeline
 
       iam_role_arn: arn:aws:iam::061578311583:role/glue-etl
 
