@@ -2,37 +2,33 @@ name: Main Glue Pipeline
 
 on:
   workflow_dispatch:
-    inputs:
-      redshift_cluster_name:
-        required: true
-        type: string
 
-      redshift_database_name:
-        required: true
-        type: string
+env:
+  REDSHIFT_CLUSTER_NAME: my-redshift-cluster
 
-      glue_job_name:
-        required: true
-        type: string
+  REDSHIFT_DATABASE_NAME: salesdb
 
-      s3_bucket_name:
-        required: true
-        type: string
+  GLUE_JOB_NAME: sales-glue-job
 
-      iam_role_arn:
-        required: true
-        type: string
+  S3_BUCKET_NAME: glue-etl-mlops-pipeline
+
+  IAM_ROLE_ARN: arn:aws:iam::061578311583:role/glue-etl
 
 jobs:
+
   create-resources:
     uses: ./.github/workflows/create-resources.yml
 
     with:
-      redshift_cluster_name: ${{ inputs.redshift_cluster_name }}
-      redshift_database_name: ${{ inputs.redshift_database_name }}
-      glue_job_name: ${{ inputs.glue_job_name }}
-      s3_bucket_name: ${{ inputs.s3_bucket_name }}
-      iam_role_arn: ${{ inputs.iam_role_arn }}
+      redshift_cluster_name: my-redshift-cluster
+
+      redshift_database_name: salesdb
+
+      glue_job_name: sales-glue-job
+
+      s3_bucket_name: my-sales-bucket
+
+      iam_role_arn: arn:aws:iam::123456789012:role/MyGlueRole
 
     secrets: inherit
 
@@ -42,6 +38,6 @@ jobs:
     uses: ./.github/workflows/run-glue-job.yml
 
     with:
-      glue_job_name: ${{ inputs.glue_job_name }}
+      glue_job_name: sales-glue-job
 
     secrets: inherit
