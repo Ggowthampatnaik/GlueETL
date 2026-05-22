@@ -1,27 +1,47 @@
-name: Glue Validation Pipeline
+name: Main Glue Pipeline
 
 on:
   workflow_dispatch:
+    inputs:
+      redshift_cluster_name:
+        required: true
+        type: string
 
-permissions:
-  id-token: write
-  contents: read
+      redshift_database_name:
+        required: true
+        type: string
+
+      glue_job_name:
+        required: true
+        type: string
+
+      s3_bucket_name:
+        required: true
+        type: string
+
+      iam_role_arn:
+        required: true
+        type: string
 
 jobs:
-  create-glue-job:
-    uses: ./.github/workflows/create-glue-job.yml
+  create-resources:
+    uses: ./.github/workflows/create-resources.yml
+
     with:
-      aws_region: us-east-1
-      role_arn: arn:aws:iam::493272324412:role/glue-etl-mlops
-      glue_job_name: data-validation-glue-job
-      script_s3_path: s3://mlops-pipeline-gowtham/scripts/data_validation.py
+      redshift_cluster_name: ${{ inputs.redshift_cluster_name }}
+      redshift_database_name: ${{ inputs.redshift_database_name }}
+      glue_job_name: ${{ inputs.glue_job_name }}
+      s3_bucket_name: ${{ inputs.s3_bucket_name }}
+      iam_role_arn: ${{ inputs.iam_role_arn }}
+
+    secrets: inherit
 
   run-glue-job:
-    needs: create-glue-job
+    needs: create-resources
+
     uses: ./.github/workflows/run-glue-job.yml
+
     with:
-      aws_region: us-east-1
-      role_arn: arn:aws:iam::493272324412:role/glue-etl-mlops
-      glue_job_name: data-validation-glue-job
-      input_path: s3://mlops-pipeline-gowtham/raw/validation/
-      output_path: s3://mlops-pipeline-gowtham/output/etl/
+      glue_job_name: ${{ inputs.glue_job_name }}
+
+    secrets: inherit
