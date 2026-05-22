@@ -28,7 +28,7 @@ jobs:
 
       s3_bucket_name: my-sales-bucket
 
-      iam_role_arn: arn:aws:iam::123456789012:role/MyGlueRole
+      iam_role_arn: arn:aws:iam::061578311583:role/glue-etl
 
     secrets: inherit
 
