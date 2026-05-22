@@ -3,22 +3,21 @@ name: Create Resources
 on:
   workflow_call:
     inputs:
-      redshift_cluster_name:
+      redshift_namespace_name:
         required: true
         type: string
-
+      redshift_workgroup_name:
+        required: true
+        type: string
       redshift_database_name:
         required: true
         type: string
-
       glue_job_name:
         required: true
         type: string
-
       s3_bucket_name:
         required: true
         type: string
-
       iam_role_arn:
         required: true
         type: string
@@ -30,34 +29,27 @@ jobs:
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
 
-      REDSHIFT_CLUSTER_NAME: ${{ inputs.redshift_cluster_name }}
+      REDSHIFT_NAMESPACE_NAME: ${{ inputs.redshift_namespace_name }}
+      REDSHIFT_WORKGROUP_NAME: ${{ inputs.redshift_workgroup_name }}
       REDSHIFT_DATABASE_NAME: ${{ inputs.redshift_database_name }}
 
       GLUE_JOB_NAME: ${{ inputs.glue_job_name }}
-
       S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
-
       IAM_ROLE_ARN: ${{ inputs.iam_role_arn }}
 
       REDSHIFT_MASTER_USER: ${{ secrets.REDSHIFT_MASTER_USER }}
       REDSHIFT_MASTER_PASSWORD: ${{ secrets.REDSHIFT_MASTER_PASSWORD }}
 
     steps:
-
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-
-      # ----------------------------------------------------
-      # Create S3 Bucket
-      # ----------------------------------------------------
 
       - name: Check or Create S3 Bucket
         run: |
@@ -65,11 +57,10 @@ jobs:
             echo "Bucket already exists"
           else
             echo "Creating bucket"
-      
+
             if [ "$AWS_REGION" = "us-east-1" ]; then
               aws s3api create-bucket \
-                --bucket "$S3_BUCKET_NAME" \
-                --region "$AWS_REGION"
+                --bucket "$S3_BUCKET_NAME"
             else
               aws s3api create-bucket \
                 --bucket "$S3_BUCKET_NAME" \
@@ -78,84 +69,74 @@ jobs:
             fi
           fi
 
-      # ----------------------------------------------------
-      # Upload CSV Files
-      # ----------------------------------------------------
-
       - name: Upload CSV Files to S3
         run: |
-
           aws s3 sync data/ s3://$S3_BUCKET_NAME/data/
 
-      # ----------------------------------------------------
-      # Create Redshift Cluster
-      # ----------------------------------------------------
-
-      - name: Check or Create Redshift Cluster
+      - name: Check or Create Redshift Serverless Namespace
         run: |
-
-          if aws redshift describe-clusters \
-            --cluster-identifier "$REDSHIFT_CLUSTER_NAME" \
-            2>/dev/null; then
-
-            echo "Redshift cluster already exists"
-
+          if aws redshift-serverless get-namespace \
+            --namespace-name "$REDSHIFT_NAMESPACE_NAME" 2>/dev/null; then
+            echo "Namespace already exists"
           else
+            echo "Creating namespace"
 
-            echo "Creating Redshift cluster"
-
-            aws redshift create-cluster \
-              --cluster-identifier "$REDSHIFT_CLUSTER_NAME" \
-              --node-type dc2.large \
-              --master-username "$REDSHIFT_MASTER_USER" \
-              --master-user-password "$REDSHIFT_MASTER_PASSWORD" \
+            aws redshift-serverless create-namespace \
+              --namespace-name "$REDSHIFT_NAMESPACE_NAME" \
               --db-name "$REDSHIFT_DATABASE_NAME" \
-              --cluster-type single-node \
+              --admin-username "$REDSHIFT_MASTER_USER" \
+              --admin-user-password "$REDSHIFT_MASTER_PASSWORD" \
               --iam-roles "$IAM_ROLE_ARN"
-
           fi
 
-      # ----------------------------------------------------
-      # Wait for Redshift
-      # ----------------------------------------------------
-
-      - name: Wait for Redshift Cluster
+      - name: Check or Create Redshift Serverless Workgroup
         run: |
+          if aws redshift-serverless get-workgroup \
+            --workgroup-name "$REDSHIFT_WORKGROUP_NAME" 2>/dev/null; then
+            echo "Workgroup already exists"
+          else
+            echo "Creating workgroup"
 
-          aws redshift wait cluster-available \
-            --cluster-identifier "$REDSHIFT_CLUSTER_NAME"
+            aws redshift-serverless create-workgroup \
+              --workgroup-name "$REDSHIFT_WORKGROUP_NAME" \
+              --namespace-name "$REDSHIFT_NAMESPACE_NAME" \
+              --base-capacity 8 \
+              --publicly-accessible
+          fi
 
-      # ----------------------------------------------------
-      # Get Endpoint
-      # ----------------------------------------------------
-
-      - name: Get Redshift Endpoint
+      - name: Wait for Redshift Serverless Workgroup
         run: |
+          for i in {1..30}; do
+            STATUS=$(aws redshift-serverless get-workgroup \
+              --workgroup-name "$REDSHIFT_WORKGROUP_NAME" \
+              --query "workgroup.status" \
+              --output text)
 
-          ENDPOINT=$(aws redshift describe-clusters \
-            --cluster-identifier "$REDSHIFT_CLUSTER_NAME" \
-            --query "Clusters[0].Endpoint.Address" \
+            echo "Workgroup status: $STATUS"
+
+            if [ "$STATUS" = "AVAILABLE" ]; then
+              break
+            fi
+
+            sleep 30
+          done
+
+      - name: Get Redshift Serverless Endpoint
+        run: |
+          ENDPOINT=$(aws redshift-serverless get-workgroup \
+            --workgroup-name "$REDSHIFT_WORKGROUP_NAME" \
+            --query "workgroup.endpoint.address" \
             --output text)
 
           echo "REDSHIFT_ENDPOINT=$ENDPOINT" >> $GITHUB_ENV
 
-      # ----------------------------------------------------
-      # Install PostgreSQL Client
-      # ----------------------------------------------------
-
       - name: Install PostgreSQL Client
         run: |
-
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
-      # ----------------------------------------------------
-      # Create Database Objects
-      # ----------------------------------------------------
-
       - name: Create Schema Table and Load CSV
         run: |
-
           export PGPASSWORD="$REDSHIFT_MASTER_PASSWORD"
 
           psql \
@@ -164,7 +145,6 @@ jobs:
             -U "$REDSHIFT_MASTER_USER" \
             -d "$REDSHIFT_DATABASE_NAME" \
             -c "
-
             CREATE SCHEMA IF NOT EXISTS glue_demo;
 
             CREATE TABLE IF NOT EXISTS glue_demo.sales_data (
@@ -182,43 +162,23 @@ jobs:
             IGNOREHEADER 1;
             "
 
-      # ----------------------------------------------------
-      # Upload Glue Script
-      # ----------------------------------------------------
-
       - name: Upload Glue Script
         run: |
-
-          aws s3 cp \
-            glue/glue_job.py \
-            s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
-
-      # ----------------------------------------------------
-      # Create Glue Job
-      # ----------------------------------------------------
+          aws s3 cp glue/glue_job.py s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
 
       - name: Check or Create Glue Job
         run: |
-
-          if aws glue get-job \
-            --job-name "$GLUE_JOB_NAME" \
-            2>/dev/null; then
-
+          if aws glue get-job --job-name "$GLUE_JOB_NAME" 2>/dev/null; then
             echo "Glue job already exists"
-
           else
-
             echo "Creating Glue Job"
 
             aws glue create-job \
               --name "$GLUE_JOB_NAME" \
               --role "$IAM_ROLE_ARN" \
-              --command \
-              "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
+              --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
               --glue-version "4.0" \
               --worker-type "G.1X" \
               --number-of-workers 2 \
-              --default-arguments \
-              '{"--job-language":"python"}'
-
+              --default-arguments '{"--job-language":"python"}'
           fi
