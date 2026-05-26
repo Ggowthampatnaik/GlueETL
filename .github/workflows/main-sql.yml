@@ -1,0 +1,35 @@
+name: Main Glue Pipeline
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-glue-resources:
+    uses: ./.github/workflows/create-glue-resources.yml
+
+    with:
+      glue_job_name: sales-glue-job
+      s3_bucket_name: glue-etl-mlops-pipeline
+      iam_role_arn: arn:aws:iam::061578311583:role/glue-etl
+      rds_instance_identifier: Glue-Etl
+      db_name: salesdb
+      db_username: admin
+
+    secrets: inherit
+
+  run-glue-job:
+    needs: create-glue-resources
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Run Glue Job
+        run: |
+          aws glue start-job-run \
+            --job-name sales-glue-job
