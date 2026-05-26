@@ -1,0 +1,112 @@
+name: Test RDS MySQL Database
+
+on:
+  workflow_dispatch:
+
+env:
+  DB_INSTANCE_IDENTIFIER: Glue-Etl
+  DB_NAME: glue_demo
+  DB_USERNAME: admin
+  DB_PORT: 3306
+
+jobs:
+  test-rds:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # ----------------------------------------------------
+      # Get RDS Endpoint
+      # ----------------------------------------------------
+
+      - name: Get RDS Endpoint
+        run: |
+
+          ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier "$DB_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].Endpoint.Address" \
+            --output text)
+
+          echo "DB_ENDPOINT=$ENDPOINT" >> $GITHUB_ENV
+
+      # ----------------------------------------------------
+      # Allow GitHub Runner IP
+      # ----------------------------------------------------
+
+      - name: Allow GitHub Runner IP to Access RDS
+        run: |
+
+          SG_ID=$(aws rds describe-db-instances \
+            --db-instance-identifier "$DB_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+            --output text)
+
+          MY_IP=$(curl -s https://checkip.amazonaws.com)
+
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp \
+            --port 3306 \
+            --cidr "$MY_IP/32" || true
+
+      # ----------------------------------------------------
+      # Install MySQL Client
+      # ----------------------------------------------------
+
+      - name: Install MySQL Client
+        run: |
+
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      # ----------------------------------------------------
+      # Show Databases
+      # ----------------------------------------------------
+
+      - name: Show Databases
+        run: |
+
+          mysql \
+            -h "$DB_ENDPOINT" \
+            -P "$DB_PORT" \
+            -u "$DB_USERNAME" \
+            -p"${{ secrets.DB_PASSWORD }}" \
+            -e "SHOW DATABASES;"
+
+      # ----------------------------------------------------
+      # Show Tables
+      # ----------------------------------------------------
+
+      - name: Show Tables
+        run: |
+
+          mysql \
+            -h "$DB_ENDPOINT" \
+            -P "$DB_PORT" \
+            -u "$DB_USERNAME" \
+            -p"${{ secrets.DB_PASSWORD }}" \
+            "$DB_NAME" \
+            -e "SHOW TABLES;"
+
+      # ----------------------------------------------------
+      # Show Table Contents
+      # ----------------------------------------------------
+
+      - name: Show sales_data Contents
+        run: |
+
+          mysql \
+            -h "$DB_ENDPOINT" \
+            -P "$DB_PORT" \
+            -u "$DB_USERNAME" \
+            -p"${{ secrets.DB_PASSWORD }}" \
+            "$DB_NAME" \
+            -e "SELECT * FROM sales_data LIMIT 20;"
