@@ -6,19 +6,12 @@ on:
       glue_job_name:
         required: true
         type: string
+
       s3_bucket_name:
         required: true
         type: string
+
       iam_role_arn:
-        required: true
-        type: string
-      rds_instance_identifier:
-        required: true
-        type: string
-      db_name:
-        required: true
-        type: string
-      db_username:
         required: true
         type: string
 
@@ -28,53 +21,92 @@ jobs:
 
     env:
       GLUE_JOB_NAME: ${{ inputs.glue_job_name }}
+
       S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
+
       IAM_ROLE_ARN: ${{ inputs.iam_role_arn }}
-      RDS_INSTANCE_IDENTIFIER: ${{ inputs.rds_instance_identifier }}
-      DB_NAME: ${{ inputs.db_name }}
-      DB_USERNAME: ${{ inputs.db_username }}
 
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
+
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      # ----------------------------------------------------
+      # Upload Glue Script
+      # ----------------------------------------------------
+
       - name: Upload Glue Script
         run: |
-          aws s3 cp glue/glue_job.py s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
 
-      - name: Get RDS Endpoint
+          aws s3 cp \
+            glue/glue_job.py \
+            s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
+
+      # ----------------------------------------------------
+      # Create Glue Connection
+      # ----------------------------------------------------
+
+      - name: Check or Create Glue Connection
         run: |
-          ENDPOINT=$(aws rds describe-db-instances \
-            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
-            --query "DBInstances[0].Endpoint.Address" \
-            --output text)
 
-          echo "RDS_ENDPOINT=$ENDPOINT" >> $GITHUB_ENV
+          if aws glue get-connection \
+            --name mysql-glue-connection \
+            2>/dev/null; then
+
+            echo "Glue connection already exists"
+
+          else
+
+            RDS_ENDPOINT=$(aws rds describe-db-instances \
+              --db-instance-identifier Glue-Etl \
+              --query "DBInstances[0].Endpoint.Address" \
+              --output text)
+
+            aws glue create-connection \
+              --connection-input '{
+                "Name":"mysql-glue-connection",
+                "ConnectionType":"JDBC",
+                "ConnectionProperties":{
+                  "JDBC_CONNECTION_URL":"jdbc:mysql://'"$RDS_ENDPOINT"':3306/glue_demo",
+                  "USERNAME":"admin",
+                  "PASSWORD":"'"${{ secrets.DB_PASSWORD }}"'"
+                }
+              }'
+          fi
+
+      # ----------------------------------------------------
+      # Create Glue Job
+      # ----------------------------------------------------
 
       - name: Check or Create Glue Job
         run: |
-          if aws glue get-job --job-name "$GLUE_JOB_NAME" 2>/dev/null; then
+
+          if aws glue get-job \
+            --job-name "$GLUE_JOB_NAME" \
+            2>/dev/null; then
+
             echo "Glue job already exists"
+
           else
+
             aws glue create-job \
               --name "$GLUE_JOB_NAME" \
               --role "$IAM_ROLE_ARN" \
-              --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
+              --command \
+              "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
               --glue-version "4.0" \
               --worker-type "G.1X" \
               --number-of-workers 2 \
-              --default-arguments "{
-                \"--job-language\":\"python\",
-                \"--rds_endpoint\":\"$RDS_ENDPOINT\",
-                \"--db_name\":\"$DB_NAME\",
-                \"--db_username\":\"$DB_USERNAME\",
-                \"--db_password\":\"${{ secrets.DB_PASSWORD }}\"
-              }"
+              --connections Connections=mysql-glue-connection \
+              --default-arguments \
+              '{"--job-language":"python"}'
+
           fi
