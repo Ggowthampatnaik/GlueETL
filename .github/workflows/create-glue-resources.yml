@@ -138,6 +138,7 @@ jobs:
           aws glue get-connection \
             --name mysql-rds-glue-connection \
             --query "Connection"
+            
 
       - name: Create S3 VPC Endpoint for Glue Subnet
         run: |
@@ -176,7 +177,13 @@ jobs:
           else
             echo "S3 VPC endpoint already exists: $EXISTING_ENDPOINT"
           fi
-                  
+
+      - name: Verify Glue Connection
+        run: |
+          aws glue get-connection \
+            --name mysql-rds-glue-connection \
+            --query "Connection.[Name,ConnectionType,PhysicalConnectionRequirements]"
+      
       - name: Check or Create Glue Job
         run: |
           if aws glue get-job --job-name "$GLUE_JOB_NAME" 2>/dev/null; then
