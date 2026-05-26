@@ -153,15 +153,20 @@ jobs:
       - name: Create Schema Table and Load CSV
         run: |
           export PGPASSWORD="$REDSHIFT_MASTER_PASSWORD"
-
+      
+          psql \
+            -h "$REDSHIFT_ENDPOINT" \
+            -p 5439 \
+            -U "$REDSHIFT_MASTER_USER" \
+            -d "$REDSHIFT_DATABASE_NAME" \
+            -c "CREATE SCHEMA IF NOT EXISTS glue_demo;"
+      
           psql \
             -h "$REDSHIFT_ENDPOINT" \
             -p 5439 \
             -U "$REDSHIFT_MASTER_USER" \
             -d "$REDSHIFT_DATABASE_NAME" \
             -c "
-            CREATE SCHEMA IF NOT EXISTS glue_demo;
-
             CREATE TABLE IF NOT EXISTS glue_demo.sales_data (
               order_id INT,
               customer_name VARCHAR(100),
@@ -169,7 +174,14 @@ jobs:
               quantity INT,
               price DECIMAL(10,2)
             );
-
+            "
+      
+          psql \
+            -h "$REDSHIFT_ENDPOINT" \
+            -p 5439 \
+            -U "$REDSHIFT_MASTER_USER" \
+            -d "$REDSHIFT_DATABASE_NAME" \
+            -c "
             COPY glue_demo.sales_data
             FROM 's3://$S3_BUCKET_NAME/data/'
             IAM_ROLE '$IAM_ROLE_ARN'
