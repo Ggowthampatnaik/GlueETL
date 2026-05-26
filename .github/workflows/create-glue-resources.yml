@@ -69,11 +69,22 @@ jobs:
 
       - name: Allow RDS Security Group Self Access
         run: |
-          aws ec2 authorize-security-group-ingress \
-            --group-id "$RDS_SG_ID" \
-            --protocol tcp \
-            --port 3306 \
-            --source-group "$RDS_SG_ID" || true
+          if aws ec2 describe-security-groups \
+            --group-ids "$RDS_SG_ID" \
+            --query "SecurityGroups[0].IpPermissions[?FromPort==\`3306\` && ToPort==\`3306\`]" \
+            --output text | grep -q "$RDS_SG_ID"; then
+      
+            echo "Security group self-access rule already exists"
+      
+          else
+      
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$RDS_SG_ID" \
+              --protocol tcp \
+              --port 3306 \
+              --source-group "$RDS_SG_ID"
+      
+          fi
 
       - name: Check or Create Glue Connection
         run: |
@@ -106,18 +117,18 @@ jobs:
             echo "Glue job already exists"
           else
            aws glue create-job \
-          --name "$GLUE_JOB_NAME" \
-          --role "$IAM_ROLE_ARN" \
-          --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
-          --glue-version "4.0" \
-          --worker-type "G.1X" \
-          --number-of-workers 2 \
-          --connections "Connections=$GLUE_CONNECTION_NAME" \
-          --default-arguments "{
-            \"--job-language\":\"python\",
-            \"--rds_endpoint\":\"$RDS_ENDPOINT\",
-            \"--db_name\":\"$DB_NAME\",
-            \"--db_username\":\"$DB_USERNAME\",
-            \"--db_password\":\"${{ secrets.DB_PASSWORD }}\"
-          }"
+            --name "$GLUE_JOB_NAME" \
+            --role "$IAM_ROLE_ARN" \
+            --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
+            --glue-version "4.0" \
+            --worker-type "G.1X" \
+            --number-of-workers 2 \
+            --connections '{"Connections":["mysql-rds-glue-connection"]}' \
+            --default-arguments "{
+              \"--job-language\":\"python\",
+              \"--rds_endpoint\":\"$RDS_ENDPOINT\",
+              \"--db_name\":\"$DB_NAME\",
+              \"--db_username\":\"$DB_USERNAME\",
+              \"--db_password\":\"${{ secrets.DB_PASSWORD }}\"
+            }"
           fi
