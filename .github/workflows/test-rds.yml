@@ -100,13 +100,12 @@ jobs:
       # Show Table Contents
       # ----------------------------------------------------
 
-      - name: Show sales_data Contents
+      - name: Show glue_demo Table Contents
         run: |
-
           mysql \
             -h "$DB_ENDPOINT" \
             -P "$DB_PORT" \
             -u "$DB_USERNAME" \
             -p"${{ secrets.DB_PASSWORD }}" \
             "$DB_NAME" \
-            -e "SELECT * FROM sales_data LIMIT 20;"
+            -e "SELECT * FROM glue_demo LIMIT 20;"
