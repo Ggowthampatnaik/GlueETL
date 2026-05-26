@@ -12,7 +12,7 @@ jobs:
       s3_bucket_name: glue-etl-mlops-pipeline
       iam_role_arn: arn:aws:iam::061578311583:role/glue-etl
       rds_instance_identifier: Glue-Etl
-      db_name: salesdb
+      db_name: glue_demo
       db_username: admin
 
     secrets: inherit
