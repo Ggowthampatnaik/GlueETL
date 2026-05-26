@@ -89,6 +89,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mysql-client
 
+      - name: Create Database If Missing
+        run: |
+          mysql \
+            -h "$DB_ENDPOINT" \
+            -P "$DB_PORT" \
+            -u "$DB_USERNAME" \
+            -p"${{ secrets.DB_PASSWORD }}" \
+            -e "CREATE DATABASE IF NOT EXISTS glue_demo;"
+
       - name: Create Table
         run: |
           mysql \
@@ -98,7 +107,7 @@ jobs:
             -p"${{ secrets.DB_PASSWORD }}" \
             "$DB_NAME" \
             -e "
-            CREATE TABLE IF NOT EXISTS sales_data (
+            CREATE TABLE IF NOT EXISTS glue_demo (
               order_id INT,
               customer_name VARCHAR(100),
               product VARCHAR(100),
@@ -118,7 +127,7 @@ jobs:
             --local-infile=1 \
             -e "
             LOAD DATA LOCAL INFILE 'data/sample.csv'
-            INTO TABLE sales_data
+            INTO TABLE glue_demo
             FIELDS TERMINATED BY ','
             ENCLOSED BY '\"'
             LINES TERMINATED BY '\n'
