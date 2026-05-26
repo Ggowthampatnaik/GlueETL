@@ -51,52 +51,24 @@ jobs:
             s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
 
       # ----------------------------------------------------
-      # Create Glue Connection
-      # ----------------------------------------------------
-
-      - name: Check or Create Glue Connection
-        run: |
-
-          if aws glue get-connection \
-            --name mysql-glue-connection \
-            2>/dev/null; then
-
-            echo "Glue connection already exists"
-
-          else
-
-            RDS_ENDPOINT=$(aws rds describe-db-instances \
-              --db-instance-identifier Glue-Etl \
-              --query "DBInstances[0].Endpoint.Address" \
-              --output text)
-
-            aws glue create-connection \
-              --connection-input '{
-                "Name":"mysql-glue-connection",
-                "ConnectionType":"JDBC",
-                "ConnectionProperties":{
-                  "JDBC_CONNECTION_URL":"jdbc:mysql://'"$RDS_ENDPOINT"':3306/glue_demo",
-                  "USERNAME":"admin",
-                  "PASSWORD":"'"${{ secrets.DB_PASSWORD }}"'"
-                }
-              }'
-          fi
-
-      # ----------------------------------------------------
       # Create Glue Job
       # ----------------------------------------------------
 
       - name: Check or Create Glue Job
         run: |
-
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier Glue-Etl \
+            --query "DBInstances[0].Endpoint.Address" \
+            --output text)
+      
           if aws glue get-job \
             --job-name "$GLUE_JOB_NAME" \
             2>/dev/null; then
-
+      
             echo "Glue job already exists"
-
+      
           else
-
+      
             aws glue create-job \
               --name "$GLUE_JOB_NAME" \
               --role "$IAM_ROLE_ARN" \
@@ -105,8 +77,12 @@ jobs:
               --glue-version "4.0" \
               --worker-type "G.1X" \
               --number-of-workers 2 \
-              --connections Connections=mysql-glue-connection \
-              --default-arguments \
-              '{"--job-language":"python"}'
-
+              --default-arguments "{
+                \"--job-language\":\"python\",
+                \"--rds_endpoint\":\"$RDS_ENDPOINT\",
+                \"--db_name\":\"glue_demo\",
+                \"--db_username\":\"admin\",
+                \"--db_password\":\"${{ secrets.DB_PASSWORD }}\"
+              }"
+      
           fi
