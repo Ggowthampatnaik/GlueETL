@@ -5,7 +5,7 @@ on:
 
 env:
   DB_INSTANCE_IDENTIFIER: Glue-Etl
-  DB_NAME: salesdb
+  DB_NAME: glue_demo
   DB_USERNAME: admin
   DB_PORT: 3306
   S3_BUCKET_NAME: glue-etl-mlops-pipeline
@@ -65,6 +65,24 @@ jobs:
             --output text)
 
           echo "DB_ENDPOINT=$ENDPOINT" >> $GITHUB_ENV
+
+      - name: Allow GitHub Runner IP to Access RDS
+        run: |
+          SG_ID=$(aws rds describe-db-instances \
+            --db-instance-identifier "$DB_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+            --output text)
+      
+          MY_IP=$(curl -s https://checkip.amazonaws.com)
+      
+          echo "Security Group: $SG_ID"
+          echo "GitHub Runner IP: $MY_IP"
+      
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp \
+            --port 3306 \
+            --cidr "$MY_IP/32" || true
 
       - name: Install MySQL Client
         run: |
