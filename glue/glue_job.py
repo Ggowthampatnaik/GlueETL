@@ -1,43 +1,36 @@
 import sys
-
 from awsglue.utils import getResolvedOptions
-
 from pyspark.context import SparkContext
-
 from awsglue.context import GlueContext
-
 from awsglue.job import Job
+from pyspark.sql.functions import col
 
-from pyspark.sql import SparkSession
-
-args = getResolvedOptions(sys.argv, ['JOB_NAME'])
-
-# ---------------------------------------------------
-# Glue Context
-# ---------------------------------------------------
+args = getResolvedOptions(
+    sys.argv,
+    [
+        "JOB_NAME",
+        "rds_endpoint",
+        "db_name",
+        "db_username",
+        "db_password"
+    ]
+)
 
 sc = SparkContext()
-
 glueContext = GlueContext(sc)
-
 spark = glueContext.spark_session
 
 job = Job(glueContext)
-
-job.init(args['JOB_NAME'], args)
+job.init(args["JOB_NAME"], args)
 
 print("Glue Job Started")
 
-# ---------------------------------------------------
-# Read MySQL Table
-# ---------------------------------------------------
-
-jdbc_url = "jdbc:mysql://Glue-Etl:3306/glue_demo"
+jdbc_url = f"jdbc:mysql://{args['rds_endpoint']}:3306/{args['db_name']}"
 
 connection_properties = {
-    "user": "admin",
-    "password": "YOUR_PASSWORD",
-    "driver": "com.mysql.jdbc.Driver"
+    "user": args["db_username"],
+    "password": args["db_password"],
+    "driver": "com.mysql.cj.jdbc.Driver"
 }
 
 df = spark.read.jdbc(
@@ -47,27 +40,14 @@ df = spark.read.jdbc(
 )
 
 print("MySQL Table Loaded")
-
 df.show()
-
-# ---------------------------------------------------
-# Example Transformation
-# ---------------------------------------------------
-
-from pyspark.sql.functions import col
 
 transformed_df = df.withColumn(
     "total_price",
-    col("quantity") * col("price")
+    col("quantity").cast("int") * col("price").cast("double")
 )
 
-print("Transformation Completed")
-
 transformed_df.show()
-
-# ---------------------------------------------------
-# Write Output to S3
-# ---------------------------------------------------
 
 output_path = "s3://glue-etl-mlops-pipeline/output/"
 
@@ -77,10 +57,6 @@ transformed_df.write \
     .csv(output_path)
 
 print("Output Written to S3")
-
-# ---------------------------------------------------
-# Commit Job
-# ---------------------------------------------------
 
 job.commit()
 
