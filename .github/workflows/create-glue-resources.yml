@@ -86,30 +86,58 @@ jobs:
       
           fi
 
-      - name: Check or Create Glue Connection
+      - name: Delete Old Glue Connection
         run: |
-          if aws glue get-connection --name "$GLUE_CONNECTION_NAME" 2>/dev/null; then
-            echo "Glue connection already exists"
-          else
-            aws glue create-connection \
-              --connection-input "{
-                \"Name\": \"$GLUE_CONNECTION_NAME\",
-                \"ConnectionType\": \"JDBC\",
-                \"ConnectionProperties\": {
-                  \"JDBC_CONNECTION_URL\": \"jdbc:mysql://$RDS_ENDPOINT:3306/$DB_NAME\",
-                  \"USERNAME\": \"$DB_USERNAME\",
-                  \"PASSWORD\": \"${{ secrets.DB_PASSWORD }}\"
-                },
-                \"PhysicalConnectionRequirements\": {
-                  \"SubnetId\": \"$SUBNET_ID\",
-                  \"SecurityGroupIdList\": [\"$RDS_SG_ID\"]
-                }
-              }"
-          fi
+          aws glue delete-connection \
+            --connection-name mysql-rds-glue-connection || true
+      
+      - name: Create Glue Connection
+        run: |
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier Glue-Etl \
+            --query "DBInstances[0].Endpoint.Address" \
+            --output text)
+      
+          RDS_SG_ID=$(aws rds describe-db-instances \
+            --db-instance-identifier Glue-Etl \
+            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+            --output text)
+      
+          SUBNET_GROUP=$(aws rds describe-db-instances \
+            --db-instance-identifier Glue-Etl \
+            --query "DBInstances[0].DBSubnetGroup.DBSubnetGroupName" \
+            --output text)
+      
+          SUBNET_ID=$(aws rds describe-db-subnet-groups \
+            --db-subnet-group-name "$SUBNET_GROUP" \
+            --query "DBSubnetGroups[0].Subnets[0].SubnetIdentifier" \
+            --output text)
+      
+          aws glue create-connection \
+            --connection-input "{
+              \"Name\": \"mysql-rds-glue-connection\",
+              \"ConnectionType\": \"JDBC\",
+              \"ConnectionProperties\": {
+                \"JDBC_CONNECTION_URL\": \"jdbc:mysql://$RDS_ENDPOINT:3306/glue_demo\",
+                \"USERNAME\": \"admin\",
+                \"PASSWORD\": \"${{ secrets.DB_PASSWORD }}\"
+              },
+              \"PhysicalConnectionRequirements\": {
+                \"SubnetId\": \"$SUBNET_ID\",
+                \"SecurityGroupIdList\": [\"$RDS_SG_ID\"]
+              }
+            }"
+            
       - name: Verify Glue Connection
         run: |
           aws glue get-connection \
             --name "$GLUE_CONNECTION_NAME"
+
+      - name: Debug Glue Connection
+        run: |
+          aws glue get-connection \
+            --name mysql-rds-glue-connection \
+            --query "Connection"
             
       - name: Check or Create Glue Job
         run: |
