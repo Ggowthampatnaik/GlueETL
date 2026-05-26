@@ -25,6 +25,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Validate DB Password Secret
+        run: |
+          if [ -z "${{ secrets.DB_PASSWORD }}" ]; then
+            echo "DB_PASSWORD secret is missing or empty"
+            exit 1
+          fi
+
       - name: Check or Create RDS MySQL Instance
         run: |
           if aws rds describe-db-instances \
