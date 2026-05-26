@@ -138,7 +138,45 @@ jobs:
           aws glue get-connection \
             --name mysql-rds-glue-connection \
             --query "Connection"
-            
+
+      - name: Create S3 VPC Endpoint for Glue Subnet
+        run: |
+          VPC_ID=$(aws ec2 describe-subnets \
+            --subnet-ids "$SUBNET_ID" \
+            --query "Subnets[0].VpcId" \
+            --output text)
+      
+          ROUTE_TABLE_ID=$(aws ec2 describe-route-tables \
+            --filters "Name=association.subnet-id,Values=$SUBNET_ID" \
+            --query "RouteTables[0].RouteTableId" \
+            --output text)
+      
+          if [ "$ROUTE_TABLE_ID" = "None" ] || [ -z "$ROUTE_TABLE_ID" ]; then
+            ROUTE_TABLE_ID=$(aws ec2 describe-route-tables \
+              --filters "Name=vpc-id,Values=$VPC_ID" "Name=association.main,Values=true" \
+              --query "RouteTables[0].RouteTableId" \
+              --output text)
+          fi
+      
+          echo "VPC_ID=$VPC_ID"
+          echo "SUBNET_ID=$SUBNET_ID"
+          echo "ROUTE_TABLE_ID=$ROUTE_TABLE_ID"
+      
+          EXISTING_ENDPOINT=$(aws ec2 describe-vpc-endpoints \
+            --filters "Name=vpc-id,Values=$VPC_ID" "Name=service-name,Values=com.amazonaws.${{ secrets.AWS_REGION }}.s3" \
+            --query "VpcEndpoints[0].VpcEndpointId" \
+            --output text)
+      
+          if [ "$EXISTING_ENDPOINT" = "None" ] || [ -z "$EXISTING_ENDPOINT" ]; then
+            aws ec2 create-vpc-endpoint \
+              --vpc-id "$VPC_ID" \
+              --service-name "com.amazonaws.${{ secrets.AWS_REGION }}.s3" \
+              --vpc-endpoint-type Gateway \
+              --route-table-ids "$ROUTE_TABLE_ID"
+          else
+            echo "S3 VPC endpoint already exists: $EXISTING_ENDPOINT"
+          fi
+                  
       - name: Check or Create Glue Job
         run: |
           if aws glue get-job --job-name "$GLUE_JOB_NAME" 2>/dev/null; then
