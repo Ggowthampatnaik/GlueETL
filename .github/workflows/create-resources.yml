@@ -135,6 +135,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y postgresql-client
 
+      - name: Allow GitHub Runner to Access Redshift
+        run: |
+          SG_ID=$(aws redshift-serverless get-workgroup \
+            --workgroup-name "$REDSHIFT_WORKGROUP_NAME" \
+            --query "workgroup.securityGroupIds[0]" \
+            --output text)
+      
+          MY_IP=$(curl -s https://checkip.amazonaws.com)
+      
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$SG_ID" \
+            --protocol tcp \
+            --port 5439 \
+            --cidr "$MY_IP/32" || true
+
       - name: Create Schema Table and Load CSV
         run: |
           export PGPASSWORD="$REDSHIFT_MASTER_PASSWORD"
