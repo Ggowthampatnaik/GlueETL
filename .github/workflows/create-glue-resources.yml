@@ -95,25 +95,29 @@ jobs:
                 }
               }"
           fi
-
+      - name: Verify Glue Connection
+        run: |
+          aws glue get-connection \
+            --name "$GLUE_CONNECTION_NAME"
+            
       - name: Check or Create Glue Job
         run: |
           if aws glue get-job --job-name "$GLUE_JOB_NAME" 2>/dev/null; then
             echo "Glue job already exists"
           else
-            aws glue create-job \
-              --name "$GLUE_JOB_NAME" \
-              --role "$IAM_ROLE_ARN" \
-              --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
-              --glue-version "4.0" \
-              --worker-type "G.1X" \
-              --number-of-workers 2 \
-              --connections Connections="$GLUE_CONNECTION_NAME" \
-              --default-arguments "{
-                \"--job-language\":\"python\",
-                \"--rds_endpoint\":\"$RDS_ENDPOINT\",
-                \"--db_name\":\"$DB_NAME\",
-                \"--db_username\":\"$DB_USERNAME\",
-                \"--db_password\":\"${{ secrets.DB_PASSWORD }}\"
-              }"
+           aws glue create-job \
+          --name "$GLUE_JOB_NAME" \
+          --role "$IAM_ROLE_ARN" \
+          --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
+          --glue-version "4.0" \
+          --worker-type "G.1X" \
+          --number-of-workers 2 \
+          --connections "Connections=$GLUE_CONNECTION_NAME" \
+          --default-arguments "{
+            \"--job-language\":\"python\",
+            \"--rds_endpoint\":\"$RDS_ENDPOINT\",
+            \"--db_name\":\"$DB_NAME\",
+            \"--db_username\":\"$DB_USERNAME\",
+            \"--db_password\":\"${{ secrets.DB_PASSWORD }}\"
+          }"
           fi
