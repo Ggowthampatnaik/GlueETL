@@ -196,7 +196,7 @@ jobs:
             --glue-version "4.0" \
             --worker-type "G.1X" \
             --number-of-workers 2 \
-            --connections '{"Connections":["mysql-rds-glue-connection"]}' \
+            --connections Connections=mysql-rds-glue-connection \
             --default-arguments "{
               \"--job-language\":\"python\",
               \"--rds_endpoint\":\"$RDS_ENDPOINT\",
