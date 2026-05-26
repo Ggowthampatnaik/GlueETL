@@ -110,6 +110,7 @@ jobs:
             STATUS=$(aws redshift-serverless get-workgroup \
               --workgroup-name "$REDSHIFT_WORKGROUP_NAME" \
               --query "workgroup.status" \
+              --query "workgroup.publiclyAccessible" \
               --output text)
 
             echo "Workgroup status: $STATUS"
