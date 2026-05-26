@@ -1,4 +1,4 @@
-name: Run Glue Job
+name: Run Glue Job SQL
 
 on:
   workflow_call:
@@ -21,7 +21,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Run Glue Job
+      # ----------------------------------------------------
+      # Run Glue Job
+      # ----------------------------------------------------
+
+      - name: Start Glue Job
         run: |
 
           aws glue start-job-run \
