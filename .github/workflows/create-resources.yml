@@ -88,6 +88,12 @@ jobs:
               --admin-user-password "$REDSHIFT_MASTER_PASSWORD" \
               --iam-roles "$IAM_ROLE_ARN"
           fi
+          
+      - name: Attach IAM Role to Redshift Serverless Namespace
+        run: |
+          aws redshift-serverless update-namespace \
+            --namespace-name "$REDSHIFT_NAMESPACE_NAME" \
+            --iam-roles "$IAM_ROLE_ARN"
 
       - name: Check or Create Redshift Serverless Workgroup
         run: |
