@@ -167,6 +167,10 @@ jobs:
             --name mysql-rds-glue-connection \
             --connection-input file://glue_connection_update.json
 
+      - name: Wait After Glue Connection Update
+        run: |
+          sleep 30
+
       - name: Verify Glue Connection After Update
         run: |
           aws glue get-connection \
