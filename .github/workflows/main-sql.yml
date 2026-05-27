@@ -2,7 +2,9 @@ name: Main Glue Pipeline
 
 on:
   workflow_dispatch:
-
+permissions:
+  id-token: write
+  contents: read
 jobs:
   create-glue-connection:
     uses: ./.github/workflows/create-glue-connection.yml
