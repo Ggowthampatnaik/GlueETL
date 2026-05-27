@@ -1,0 +1,84 @@
+name: Create Glue Connection
+
+on:
+  workflow_dispatch:
+
+env:
+  RDS_INSTANCE_IDENTIFIER: Glue-Etl
+  DB_NAME: glue_demo
+  DB_USERNAME: admin
+  GLUE_CONNECTION_NAME: mysql-rds-glue-connection
+  SUBNET_ID: subnet-0fec96bcf7da9adc4
+
+jobs:
+  create-connection:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Get RDS Details
+        run: |
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].Endpoint.Address" \
+            --output text)
+
+          RDS_SG_ID=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+            --output text)
+
+          echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
+          echo "RDS_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
+
+      - name: Allow RDS Security Group Self Access
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$RDS_SG_ID" \
+            --protocol tcp \
+            --port 3306 \
+            --source-group "$RDS_SG_ID" || true
+
+      - name: Delete Existing Glue Connection
+        run: |
+          aws glue delete-connection \
+            --connection-name "$GLUE_CONNECTION_NAME" || true
+
+      - name: Create Glue Connection
+        run: |
+          cat > glue_connection.json <<EOF
+          {
+            "ConnectionInput": {
+              "Name": "$GLUE_CONNECTION_NAME",
+              "ConnectionType": "JDBC",
+              "ConnectionProperties": {
+                "JDBC_CONNECTION_URL": "jdbc:mysql://$RDS_ENDPOINT:3306/$DB_NAME",
+                "USERNAME": "$DB_USERNAME",
+                "PASSWORD": "${{ secrets.DB_PASSWORD }}"
+              },
+              "PhysicalConnectionRequirements": {
+                "SubnetId": "$SUBNET_ID",
+                "SecurityGroupIdList": ["$RDS_SG_ID"]
+              }
+            }
+          }
+          EOF
+
+          aws glue create-connection \
+            --cli-input-json file://glue_connection.json
+
+      - name: Wait After Connection Creation
+        run: |
+          sleep 60
+
+      - name: Verify Glue Connection
+        run: |
+          aws glue get-connection \
+            --name "$GLUE_CONNECTION_NAME" \
+            --query "Connection.[Name,ConnectionType,ConnectionProperties,PhysicalConnectionRequirements]"
