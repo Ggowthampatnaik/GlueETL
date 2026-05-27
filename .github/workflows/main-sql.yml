@@ -4,17 +4,23 @@ on:
   workflow_dispatch:
 
 jobs:
+
   create-glue-resources:
     uses: ./.github/workflows/create-glue-resources.yml
+
     with:
       glue_job_name: sales-glue-job
       s3_bucket_name: glue-etl-mlops-pipeline
       iam_role_arn: arn:aws:iam::061578311583:role/glue-etl
+
     secrets: inherit
 
   run-glue-job:
     needs: create-glue-resources
+
     uses: ./.github/workflows/run-glue-job.yml
+
     with:
       glue_job_name: sales-glue-job
+
     secrets: inherit
