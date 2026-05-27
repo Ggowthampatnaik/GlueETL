@@ -102,12 +102,13 @@ jobs:
         run: |
           aws glue delete-connection \
             --connection-name "$NETWORK_CONNECTION_NAME" || true
-
+      
           cat > network_connection.json <<EOF
           {
             "ConnectionInput": {
               "Name": "$NETWORK_CONNECTION_NAME",
               "ConnectionType": "NETWORK",
+              "ConnectionProperties": {},
               "PhysicalConnectionRequirements": {
                 "SubnetId": "$SUBNET_ID",
                 "SecurityGroupIdList": ["$RDS_SG_ID"]
@@ -115,7 +116,7 @@ jobs:
             }
           }
           EOF
-
+      
           aws glue create-connection \
             --cli-input-json file://network_connection.json
 
