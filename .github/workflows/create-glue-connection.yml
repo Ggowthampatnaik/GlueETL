@@ -9,15 +9,12 @@ env:
   SUBNET_ID: subnet-0fec96bcf7da9adc4
 
 jobs:
-
   create-network-connection:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -25,7 +22,6 @@ jobs:
 
       - name: Get RDS Security Group
         run: |
-
           RDS_SG_ID=$(aws rds describe-db-instances \
             --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
             --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
@@ -35,7 +31,6 @@ jobs:
 
       - name: Allow RDS Self Access
         run: |
-
           aws ec2 authorize-security-group-ingress \
             --group-id "$RDS_SG_ID" \
             --protocol tcp \
@@ -44,13 +39,11 @@ jobs:
 
       - name: Delete Existing Network Connection
         run: |
-
           aws glue delete-connection \
             --connection-name "$NETWORK_CONNECTION_NAME" || true
 
       - name: Create Network Connection
         run: |
-
           SUBNET_AZ=$(aws ec2 describe-subnets \
             --subnet-ids "$SUBNET_ID" \
             --query "Subnets[0].AvailabilityZone" \
@@ -76,6 +69,5 @@ jobs:
 
       - name: Verify Connection
         run: |
-
           aws glue get-connection \
             --name "$NETWORK_CONNECTION_NAME"
