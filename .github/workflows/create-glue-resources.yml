@@ -2,41 +2,53 @@ name: Create Glue Resources
 
 on:
   workflow_call:
+
     inputs:
+
       glue_job_name:
         required: true
         type: string
+
       s3_bucket_name:
         required: true
         type: string
+
       iam_role_arn:
         required: true
         type: string
 
 jobs:
+
   create-glue:
     runs-on: ubuntu-latest
 
     env:
       GLUE_JOB_NAME: ${{ inputs.glue_job_name }}
+
       S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
+
       IAM_ROLE_ARN: ${{ inputs.iam_role_arn }}
 
-      RDS_INSTANCE_IDENTIFIER: Glue-Etl
+      SECRET_NAME: glue-rds-mysql-secret
+
       DB_NAME: glue_demo
+
       DB_USERNAME: admin
+
       DB_TABLE: glue_demo
 
       NETWORK_CONNECTION_NAME: mysql-rds-network-connection
-      SECRET_NAME: glue-rds-mysql-secret
-      SUBNET_ID: subnet-0fec96bcf7da9adc4
+
+      RDS_INSTANCE_IDENTIFIER: Glue-Etl
 
     steps:
+
       - name: Checkout Repository
         uses: actions/checkout@v4
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
+
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -44,35 +56,27 @@ jobs:
 
       - name: Upload Glue Script
         run: |
-          aws s3 cp glue/glue_job.py s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
 
-      - name: Get RDS Details
+          aws s3 cp \
+            glue/glue_job.py \
+            s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
+
+      - name: Get RDS Endpoint
         run: |
+
           RDS_ENDPOINT=$(aws rds describe-db-instances \
             --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
             --query "DBInstances[0].Endpoint.Address" \
             --output text)
 
-          RDS_SG_ID=$(aws rds describe-db-instances \
-            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
-            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
-            --output text)
-
           echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
-          echo "RDS_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
-
-      - name: Allow RDS Security Group Self Access
-        run: |
-          aws ec2 authorize-security-group-ingress \
-            --group-id "$RDS_SG_ID" \
-            --protocol tcp \
-            --port 3306 \
-            --source-group "$RDS_SG_ID" || true
 
       - name: Create or Update Secrets Manager Secret
         env:
           DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
+
         run: |
+
           cat > secret.json <<EOF
           {
             "host": "$RDS_ENDPOINT",
@@ -83,64 +87,29 @@ jobs:
           }
           EOF
 
-          if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" 2>/dev/null; then
+          if aws secretsmanager describe-secret \
+            --secret-id "$SECRET_NAME" 2>/dev/null; then
+
             aws secretsmanager put-secret-value \
               --secret-id "$SECRET_NAME" \
               --secret-string file://secret.json
+
           else
+
             aws secretsmanager create-secret \
               --name "$SECRET_NAME" \
               --secret-string file://secret.json
+
           fi
 
-      - name: Delete Old JDBC Glue Connection
+      - name: Delete Existing Glue Job
         run: |
-          aws glue delete-connection \
-            --connection-name mysql-rds-glue-connection || true
 
-      - name: Create Network Glue Connection
-        run: |
-          NETWORK_CONNECTION_NAME="mysql-rds-network-connection"
-          SUBNET_ID="subnet-0fec96bcf7da9adc4"
-      
-          aws glue delete-connection \
-            --connection-name "$NETWORK_CONNECTION_NAME" || true
-      
-          RDS_SG_ID=$(aws rds describe-db-instances \
-            --db-instance-identifier Glue-Etl \
-            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
-            --output text)
-      
-          SUBNET_AZ=$(aws ec2 describe-subnets \
-            --subnet-ids "$SUBNET_ID" \
-            --query "Subnets[0].AvailabilityZone" \
-            --output text)
-      
-          echo "SUBNET_ID=$SUBNET_ID"
-          echo "SUBNET_AZ=$SUBNET_AZ"
-          echo "RDS_SG_ID=$RDS_SG_ID"
-      
-          cat > network_connection.json <<EOF
-          {
-            "ConnectionInput": {
-              "Name": "$NETWORK_CONNECTION_NAME",
-              "ConnectionType": "NETWORK",
-              "ConnectionProperties": {},
-              "PhysicalConnectionRequirements": {
-                "SubnetId": "$SUBNET_ID",
-                "SecurityGroupIdList": ["$RDS_SG_ID"],
-                "AvailabilityZone": "$SUBNET_AZ"
-              }
-            }
-          }
-          EOF
-      
-          aws glue create-connection \
-            --cli-input-json file://network_connection.json
+          aws glue delete-job \
+            --job-name "$GLUE_JOB_NAME" || true
 
       - name: Create Glue Job
         run: |
-          aws glue delete-job --job-name "$GLUE_JOB_NAME" || true
 
           aws glue create-job \
             --name "$GLUE_JOB_NAME" \
@@ -159,6 +128,7 @@ jobs:
 
       - name: Verify Glue Job Connection
         run: |
+
           aws glue get-job \
             --job-name "$GLUE_JOB_NAME" \
             --query "Job.Connections"
