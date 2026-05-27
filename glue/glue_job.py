@@ -6,7 +6,6 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
-from pyspark.sql.functions import col
 
 args = getResolvedOptions(
     sys.argv,
@@ -19,26 +18,48 @@ args = getResolvedOptions(
 )
 
 sc = SparkContext()
+
 glueContext = GlueContext(sc)
+
 spark = glueContext.spark_session
 
 job = Job(glueContext)
+
 job.init(args["JOB_NAME"], args)
 
 print("Glue Job Started")
 
-secrets_client = boto3.client("secretsmanager")
-secret_response = secrets_client.get_secret_value(
+# ---------------------------------------------------
+# Read Secret
+# ---------------------------------------------------
+
+client = boto3.client("secretsmanager")
+
+secret_response = client.get_secret_value(
     SecretId=args["secret_name"]
 )
 
 secret = json.loads(secret_response["SecretString"])
 
-jdbc_url = f"jdbc:mysql://{secret['host']}:{secret['port']}/{secret['database']}"
+host = secret["host"]
+
+port = secret["port"]
+
+database = secret["database"]
+
+username = secret["username"]
+
+password = secret["password"]
+
+# ---------------------------------------------------
+# JDBC Read
+# ---------------------------------------------------
+
+jdbc_url = f"jdbc:mysql://{host}:{port}/{database}"
 
 connection_properties = {
-    "user": secret["username"],
-    "password": secret["password"],
+    "user": username,
+    "password": password,
     "driver": "com.mysql.cj.jdbc.Driver"
 }
 
@@ -48,23 +69,21 @@ df = spark.read.jdbc(
     properties=connection_properties
 )
 
-print("MySQL table loaded")
+print("Data Loaded")
+
 df.show()
 
-transformed_df = df.withColumn(
-    "total_price",
-    col("quantity").cast("int") * col("price").cast("double")
-)
+# ---------------------------------------------------
+# Write to S3
+# ---------------------------------------------------
 
-transformed_df.show()
-
-transformed_df.write \
+df.write \
     .mode("overwrite") \
     .option("header", "true") \
     .csv(args["output_path"])
 
-print("Output written to S3")
+print("Data Written to S3")
 
 job.commit()
 
-print("Glue Job Completed Successfully")
+print("Glue Job Completed")
