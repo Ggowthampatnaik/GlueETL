@@ -31,43 +31,55 @@ jobs:
 
       - name: Allow RDS Self Access
         run: |
-          aws ec2 authorize-security-group-ingress \
-            --group-id "$RDS_SG_ID" \
-            --protocol tcp \
-            --port 3306 \
-            --source-group "$RDS_SG_ID" || true
+          if aws ec2 describe-security-groups \
+            --group-ids "$RDS_SG_ID" \
+            --query "SecurityGroups[0].IpPermissions[?FromPort==\`3306\` && ToPort==\`3306\`]" \
+            --output text | grep -q "$RDS_SG_ID"; then
+            echo "RDS self-access rule already exists"
+          else
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$RDS_SG_ID" \
+              --protocol tcp \
+              --port 3306 \
+              --source-group "$RDS_SG_ID"
+          fi
 
-      - name: Delete Existing Network Connection
+      - name: Check or Create Network Connection
         run: |
-          aws glue delete-connection \
-            --connection-name "$NETWORK_CONNECTION_NAME" || true
+          if aws glue get-connection \
+            --name "$NETWORK_CONNECTION_NAME" 2>/dev/null; then
 
-      - name: Create Network Connection
-        run: |
-          SUBNET_AZ=$(aws ec2 describe-subnets \
-            --subnet-ids "$SUBNET_ID" \
-            --query "Subnets[0].AvailabilityZone" \
-            --output text)
+            echo "Glue network connection already exists: $NETWORK_CONNECTION_NAME"
 
-          cat > network_connection.json <<EOF
-          {
-            "ConnectionInput": {
-              "Name": "$NETWORK_CONNECTION_NAME",
-              "ConnectionType": "NETWORK",
-              "ConnectionProperties": {},
-              "PhysicalConnectionRequirements": {
-                "SubnetId": "$SUBNET_ID",
-                "SecurityGroupIdList": ["$RDS_SG_ID"],
-                "AvailabilityZone": "$SUBNET_AZ"
+          else
+
+            SUBNET_AZ=$(aws ec2 describe-subnets \
+              --subnet-ids "$SUBNET_ID" \
+              --query "Subnets[0].AvailabilityZone" \
+              --output text)
+
+            cat > network_connection.json <<EOF
+            {
+              "ConnectionInput": {
+                "Name": "$NETWORK_CONNECTION_NAME",
+                "ConnectionType": "NETWORK",
+                "ConnectionProperties": {},
+                "PhysicalConnectionRequirements": {
+                  "SubnetId": "$SUBNET_ID",
+                  "SecurityGroupIdList": ["$RDS_SG_ID"],
+                  "AvailabilityZone": "$SUBNET_AZ"
+                }
               }
             }
-          }
           EOF
 
-          aws glue create-connection \
-            --cli-input-json file://network_connection.json
+            aws glue create-connection \
+              --cli-input-json file://network_connection.json
+
+          fi
 
       - name: Verify Connection
         run: |
           aws glue get-connection \
-            --name "$NETWORK_CONNECTION_NAME"
+            --name "$NETWORK_CONNECTION_NAME" \
+            --query "Connection.[Name,ConnectionType,PhysicalConnectionRequirements]"
