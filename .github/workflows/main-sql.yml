@@ -23,6 +23,8 @@ jobs:
       db_username: admin
       db_table: glue_demo
       network_connection_name: mysql-rds-network-connection
+      script_location: s3://glue-etl-mlops-pipeline/glue-scripts/glue_job.py
+      output_path: s3://glue-etl-mlops-pipeline/output/
     secrets: inherit
 
   run-glue-job:
