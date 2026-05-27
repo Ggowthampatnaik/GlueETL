@@ -27,6 +27,12 @@ on:
       network_connection_name:
         required: true
         type: string
+      script_location:
+        required: true
+        type: string
+      output_path:
+        required: true
+        type: string
 
 jobs:
   create-glue:
@@ -41,6 +47,8 @@ jobs:
       DB_USERNAME: ${{ inputs.db_username }}
       DB_TABLE: ${{ inputs.db_table }}
       NETWORK_CONNECTION_NAME: ${{ inputs.network_connection_name }}
+      SCRIPT_LOCATION: ${{ inputs.script_location }}
+      OUTPUT_PATH: ${{ inputs.output_path }}
 
     steps:
       - name: Checkout Repository
@@ -55,7 +63,7 @@ jobs:
 
       - name: Upload Glue Script
         run: |
-          aws s3 cp glue/glue_job.py s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
+          aws s3 cp glue/glue_job.py "$SCRIPT_LOCATION"
 
       - name: Get RDS Endpoint
         run: |
@@ -86,7 +94,7 @@ jobs:
                 \"Role\": \"$IAM_ROLE_ARN\",
                 \"Command\": {
                   \"Name\": \"glueetl\",
-                  \"ScriptLocation\": \"s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py\",
+                  \"ScriptLocation\": \"$SCRIPT_LOCATION\",
                   \"PythonVersion\": \"3\"
                 },
                 \"GlueVersion\": \"5.0\",
@@ -102,7 +110,7 @@ jobs:
                   \"--db_username\": \"$DB_USERNAME\",
                   \"--db_password\": \"$DB_PASSWORD_SECRET\",
                   \"--db_table\": \"$DB_TABLE\",
-                  \"--output_path\": \"s3://$S3_BUCKET_NAME/output/\"
+                  \"--output_path\": \"$OUTPUT_PATH\"
                 }
               }"
 
@@ -113,7 +121,7 @@ jobs:
             aws glue create-job \
               --name "$GLUE_JOB_NAME" \
               --role "$IAM_ROLE_ARN" \
-              --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
+              --command "Name=glueetl,ScriptLocation=$SCRIPT_LOCATION,PythonVersion=3" \
               --glue-version "5.0" \
               --worker-type "G.1X" \
               --number-of-workers 2 \
@@ -125,7 +133,7 @@ jobs:
                 \"--db_username\":\"$DB_USERNAME\",
                 \"--db_password\":\"$DB_PASSWORD_SECRET\",
                 \"--db_table\":\"$DB_TABLE\",
-                \"--output_path\":\"s3://$S3_BUCKET_NAME/output/\"
+                 \"--output_path\": \"$OUTPUT_PATH\"
               }"
 
           fi
