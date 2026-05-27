@@ -90,7 +90,7 @@ jobs:
         run: |
           aws glue delete-connection \
             --connection-name mysql-rds-glue-connection || true
-      
+            
       - name: Create Glue Connection
         run: |
           RDS_ENDPOINT=$(aws rds describe-db-instances \
@@ -103,27 +103,30 @@ jobs:
             --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
             --output text)
       
-          SUBNET_GROUP=$(aws rds describe-db-instances \
-            --db-instance-identifier Glue-Etl \
-            --query "DBInstances[0].DBSubnetGroup.DBSubnetGroupName" \
-            --output text)
-      
           SUBNET_ID="subnet-0fec96bcf7da9adc4"
       
-          aws glue create-connection \
-            --connection-input "{
-              \"Name\": \"mysql-rds-glue-connection\",
-              \"ConnectionType\": \"JDBC\",
-              \"ConnectionProperties\": {
-                \"JDBC_CONNECTION_URL\": \"jdbc:mysql://$RDS_ENDPOINT:3306/glue_demo\",
-                \"USERNAME\": \"admin\",
-                \"PASSWORD\": \"${{ secrets.DB_PASSWORD }}\"
+          cat > glue_connection.json <<EOF
+          {
+            "ConnectionInput": {
+              "Name": "mysql-rds-glue-connection",
+              "ConnectionType": "JDBC",
+              "ConnectionProperties": {
+                "JDBC_CONNECTION_URL": "jdbc:mysql://$RDS_ENDPOINT:3306/glue_demo",
+                "USERNAME": "admin",
+                "PASSWORD": "${{ secrets.DB_PASSWORD }}"
               },
-              \"PhysicalConnectionRequirements\": {
-                \"SubnetId\": \"$SUBNET_ID\",
-                \"SecurityGroupIdList\": [\"$RDS_SG_ID\"]
+              "PhysicalConnectionRequirements": {
+                "SubnetId": "$SUBNET_ID",
+                "SecurityGroupIdList": ["$RDS_SG_ID"]
               }
-            }"
+            }
+          }
+          EOF
+      
+          aws glue create-connection \
+            --cli-input-json file://glue_connection.json
+      
+            
             
       - name: Verify Glue Connection
         run: |
@@ -179,26 +182,18 @@ jobs:
         run: |
           aws glue get-connection \
             --name mysql-rds-glue-connection \
-            --query "Connection.[Name,ConnectionType,PhysicalConnectionRequirements]"
+            --query "Connection.[Name,ConnectionType,ConnectionProperties,PhysicalConnectionRequirements]"
       
-      - name: Check or Create Glue Job
+      - name: Create Glue Job
         run: |
-          if aws glue get-job --job-name "$GLUE_JOB_NAME" 2>/dev/null; then
-            echo "Glue job already exists"
-          else
-           aws glue create-job \
+          aws glue delete-job --job-name "$GLUE_JOB_NAME" || true
+      
+          aws glue create-job \
             --name "$GLUE_JOB_NAME" \
             --role "$IAM_ROLE_ARN" \
             --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
-            --glue-version "4.0" \
+            --glue-version "5.0" \
             --worker-type "G.1X" \
             --number-of-workers 2 \
             --connections Connections=mysql-rds-glue-connection \
-            --default-arguments "{
-              \"--job-language\":\"python\",
-              \"--rds_endpoint\":\"$RDS_ENDPOINT\",
-              \"--db_name\":\"$DB_NAME\",
-              \"--db_username\":\"$DB_USERNAME\",
-              \"--db_password\":\"${{ secrets.DB_PASSWORD }}\"
-            }"
-          fi
+            --default-arguments '{"--job-language":"python"}'
