@@ -52,32 +52,69 @@ jobs:
 
           echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
 
-      - name: Delete Existing Glue Job
+      - name: Verify Network Connection Exists
         run: |
-          aws glue delete-job \
-            --job-name "$GLUE_JOB_NAME" || true
+          aws glue get-connection \
+            --name "$NETWORK_CONNECTION_NAME" \
+            --query "Connection.[Name,ConnectionType,PhysicalConnectionRequirements]"
 
-      - name: Create Glue Job
+      - name: Create or Update Glue Job
         env:
           DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
         run: |
-          aws glue create-job \
-            --name "$GLUE_JOB_NAME" \
-            --role "$IAM_ROLE_ARN" \
-            --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
-            --glue-version "5.0" \
-            --worker-type "G.1X" \
-            --number-of-workers 2 \
-            --connections Connections="$NETWORK_CONNECTION_NAME" \
-            --default-arguments "{
-              \"--job-language\":\"python\",
-              \"--rds_endpoint\":\"$RDS_ENDPOINT\",
-              \"--db_name\":\"$DB_NAME\",
-              \"--db_username\":\"$DB_USERNAME\",
-              \"--db_password\":\"$DB_PASSWORD_SECRET\",
-              \"--db_table\":\"$DB_TABLE\",
-              \"--output_path\":\"s3://$S3_BUCKET_NAME/output/\"
-            }"
+          if aws glue get-job --job-name "$GLUE_JOB_NAME" 2>/dev/null; then
+
+            echo "Glue job exists. Updating job..."
+
+            aws glue update-job \
+              --job-name "$GLUE_JOB_NAME" \
+              --job-update "{
+                \"Role\": \"$IAM_ROLE_ARN\",
+                \"Command\": {
+                  \"Name\": \"glueetl\",
+                  \"ScriptLocation\": \"s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py\",
+                  \"PythonVersion\": \"3\"
+                },
+                \"GlueVersion\": \"5.0\",
+                \"WorkerType\": \"G.1X\",
+                \"NumberOfWorkers\": 2,
+                \"Connections\": {
+                  \"Connections\": [\"$NETWORK_CONNECTION_NAME\"]
+                },
+                \"DefaultArguments\": {
+                  \"--job-language\": \"python\",
+                  \"--rds_endpoint\": \"$RDS_ENDPOINT\",
+                  \"--db_name\": \"$DB_NAME\",
+                  \"--db_username\": \"$DB_USERNAME\",
+                  \"--db_password\": \"$DB_PASSWORD_SECRET\",
+                  \"--db_table\": \"$DB_TABLE\",
+                  \"--output_path\": \"s3://$S3_BUCKET_NAME/output/\"
+                }
+              }"
+
+          else
+
+            echo "Glue job does not exist. Creating job..."
+
+            aws glue create-job \
+              --name "$GLUE_JOB_NAME" \
+              --role "$IAM_ROLE_ARN" \
+              --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
+              --glue-version "5.0" \
+              --worker-type "G.1X" \
+              --number-of-workers 2 \
+              --connections Connections="$NETWORK_CONNECTION_NAME" \
+              --default-arguments "{
+                \"--job-language\":\"python\",
+                \"--rds_endpoint\":\"$RDS_ENDPOINT\",
+                \"--db_name\":\"$DB_NAME\",
+                \"--db_username\":\"$DB_USERNAME\",
+                \"--db_password\":\"$DB_PASSWORD_SECRET\",
+                \"--db_table\":\"$DB_TABLE\",
+                \"--output_path\":\"s3://$S3_BUCKET_NAME/output/\"
+              }"
+
+          fi
 
       - name: Verify Glue Job Connection
         run: |
