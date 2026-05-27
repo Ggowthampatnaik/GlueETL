@@ -108,10 +108,7 @@ jobs:
             --query "DBInstances[0].DBSubnetGroup.DBSubnetGroupName" \
             --output text)
       
-          SUBNET_ID=$(aws rds describe-db-subnet-groups \
-            --db-subnet-group-name "$SUBNET_GROUP" \
-            --query "DBSubnetGroups[0].Subnets[0].SubnetIdentifier" \
-            --output text)
+          SUBNET_ID="subnet-0fec96bcf7da9adc4"
       
           aws glue create-connection \
             --connection-input "{
