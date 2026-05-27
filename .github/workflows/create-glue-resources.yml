@@ -108,7 +108,7 @@ jobs:
             --query "DBInstances[0].DBSubnetGroup.DBSubnetGroupName" \
             --output text)
       
-          SUBNET_ID="subnet-0fc890a7571121f58"
+          SUBNET_ID="subnet-0fec96bcf7da9adc4"
       
           aws glue create-connection \
             --connection-input "{
