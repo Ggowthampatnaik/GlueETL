@@ -89,37 +89,29 @@ jobs:
       # ----------------------------------------------------
       # Create Connection Only If Missing
       # ----------------------------------------------------
-
       - name: Check or Create Network Connection
         run: |
-
-          if aws glue get-connection \
-            --name "$NETWORK_CONNECTION_NAME" 2>/dev/null; then
-
+          if aws glue get-connection --name "$NETWORK_CONNECTION_NAME" 2>/dev/null; then
             echo "Glue connection already exists"
-
           else
-
-            cat > network_connection.json <<EOF
-            {
+            printf '{
               "ConnectionInput": {
-                "Name": "$NETWORK_CONNECTION_NAME",
+                "Name": "%s",
                 "ConnectionType": "NETWORK",
                 "ConnectionProperties": {},
                 "PhysicalConnectionRequirements": {
-                  "SubnetId": "$SUBNET_ID",
-                  "SecurityGroupIdList": ["$RDS_SG_ID"],
-                  "AvailabilityZone": "$SUBNET_AZ"
+                  "SubnetId": "%s",
+                  "SecurityGroupIdList": ["%s"],
+                  "AvailabilityZone": "%s"
                 }
               }
-            }
-            EOF
-
+            }' "$NETWORK_CONNECTION_NAME" "$SUBNET_ID" "$RDS_SG_ID" "$SUBNET_AZ" > network_connection.json
+      
+            cat network_connection.json
+      
             aws glue create-connection \
               --cli-input-json file://network_connection.json
-
-            fi
-
+          fi
       # ----------------------------------------------------
       # Verify Connection
       # ----------------------------------------------------
