@@ -1,62 +1,104 @@
 name: Create Glue Network Connection
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      network_connection_name:
+        required: true
+        type: string
 
-env:
-  NETWORK_CONNECTION_NAME: mysql-rds-network-connection
-  RDS_INSTANCE_IDENTIFIER: Glue-Etl
-  SUBNET_ID: subnet-0fec96bcf7da9adc4
+      rds_instance_identifier:
+        required: true
+        type: string
 
 jobs:
   create-network-connection:
     runs-on: ubuntu-latest
 
+    env:
+      NETWORK_CONNECTION_NAME: ${{ inputs.network_connection_name }}
+      RDS_INSTANCE_IDENTIFIER: ${{ inputs.rds_instance_identifier }}
+
     steps:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
+
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Get RDS Security Group
+      # ----------------------------------------------------
+      # Get RDS Networking Details
+      # ----------------------------------------------------
+
+      - name: Get RDS Network Details
         run: |
+
           RDS_SG_ID=$(aws rds describe-db-instances \
             --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
             --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
             --output text)
 
+          DB_SUBNET_GROUP=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].DBSubnetGroup.DBSubnetGroupName" \
+            --output text)
+
+          SUBNET_ID=$(aws rds describe-db-subnet-groups \
+            --db-subnet-group-name "$DB_SUBNET_GROUP" \
+            --query "DBSubnetGroups[0].Subnets[0].SubnetIdentifier" \
+            --output text)
+
+          SUBNET_AZ=$(aws ec2 describe-subnets \
+            --subnet-ids "$SUBNET_ID" \
+            --query "Subnets[0].AvailabilityZone" \
+            --output text)
+
           echo "RDS_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
+          echo "SUBNET_ID=$SUBNET_ID" >> $GITHUB_ENV
+          echo "SUBNET_AZ=$SUBNET_AZ" >> $GITHUB_ENV
+
+          echo "Selected Subnet: $SUBNET_ID"
+          echo "Selected AZ: $SUBNET_AZ"
+
+      # ----------------------------------------------------
+      # Allow RDS Security Group Self Access
+      # ----------------------------------------------------
 
       - name: Allow RDS Self Access
         run: |
+
           if aws ec2 describe-security-groups \
             --group-ids "$RDS_SG_ID" \
             --query "SecurityGroups[0].IpPermissions[?FromPort==\`3306\` && ToPort==\`3306\`]" \
             --output text | grep -q "$RDS_SG_ID"; then
+
             echo "RDS self-access rule already exists"
+
           else
+
             aws ec2 authorize-security-group-ingress \
               --group-id "$RDS_SG_ID" \
               --protocol tcp \
               --port 3306 \
               --source-group "$RDS_SG_ID"
+
           fi
+
+      # ----------------------------------------------------
+      # Create Connection Only If Missing
+      # ----------------------------------------------------
 
       - name: Check or Create Network Connection
         run: |
+
           if aws glue get-connection \
             --name "$NETWORK_CONNECTION_NAME" 2>/dev/null; then
 
-            echo "Glue network connection already exists: $NETWORK_CONNECTION_NAME"
+            echo "Glue connection already exists"
 
           else
-
-            SUBNET_AZ=$(aws ec2 describe-subnets \
-              --subnet-ids "$SUBNET_ID" \
-              --query "Subnets[0].AvailabilityZone" \
-              --output text)
 
             cat > network_connection.json <<EOF
             {
@@ -71,15 +113,20 @@ jobs:
                 }
               }
             }
-          EOF
+            EOF
 
             aws glue create-connection \
               --cli-input-json file://network_connection.json
 
           fi
 
+      # ----------------------------------------------------
+      # Verify Connection
+      # ----------------------------------------------------
+
       - name: Verify Connection
         run: |
+
           aws glue get-connection \
             --name "$NETWORK_CONNECTION_NAME" \
             --query "Connection.[Name,ConnectionType,PhysicalConnectionRequirements]"
