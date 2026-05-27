@@ -2,23 +2,18 @@ name: Run Glue Job
 
 on:
   workflow_call:
-
     inputs:
-
       glue_job_name:
         required: true
         type: string
 
 jobs:
-
   run-glue:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -26,6 +21,5 @@ jobs:
 
       - name: Start Glue Job
         run: |
-
           aws glue start-job-run \
             --job-name "${{ inputs.glue_job_name }}"
