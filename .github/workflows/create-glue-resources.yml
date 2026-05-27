@@ -50,6 +50,9 @@ jobs:
       SCRIPT_LOCATION: ${{ inputs.script_location }}
       OUTPUT_PATH: ${{ inputs.output_path }}
 
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -57,8 +60,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::061578311583:role/github-glue-deploy-role
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Upload Glue Script
