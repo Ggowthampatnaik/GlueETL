@@ -133,6 +133,46 @@ jobs:
           aws glue get-connection \
             --name "$GLUE_CONNECTION_NAME"
 
+      - name: Force Update Glue Connection Password
+        run: |
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier Glue-Etl \
+            --query "DBInstances[0].Endpoint.Address" \
+            --output text)
+      
+          RDS_SG_ID=$(aws rds describe-db-instances \
+            --db-instance-identifier Glue-Etl \
+            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+            --output text)
+      
+          SUBNET_ID="subnet-0fec96bcf7da9adc4"
+      
+          cat > glue_connection_update.json <<EOF
+          {
+            "Name": "mysql-rds-glue-connection",
+            "ConnectionType": "JDBC",
+            "ConnectionProperties": {
+              "JDBC_CONNECTION_URL": "jdbc:mysql://$RDS_ENDPOINT:3306/glue_demo",
+              "USERNAME": "admin",
+              "PASSWORD": "${{ secrets.DB_PASSWORD }}"
+            },
+            "PhysicalConnectionRequirements": {
+              "SubnetId": "$SUBNET_ID",
+              "SecurityGroupIdList": ["$RDS_SG_ID"]
+            }
+          }
+          EOF
+      
+          aws glue update-connection \
+            --name mysql-rds-glue-connection \
+            --connection-input file://glue_connection_update.json
+
+      - name: Verify Glue Connection After Update
+        run: |
+          aws glue get-connection \
+            --name mysql-rds-glue-connection \
+            --query "Connection.ConnectionProperties"
+      
       - name: Debug Glue Connection
         run: |
           aws glue get-connection \
