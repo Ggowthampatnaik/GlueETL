@@ -11,6 +11,10 @@ on:
         required: true
         type: string
 
+      github_role_arn:
+        required: true
+        type: string
+
 jobs:
   create-network-connection:
     runs-on: ubuntu-latest
@@ -27,7 +31,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::061578311583:role/github-glue-role
+          role-to-assume:  ${{ inputs.github_role_arn }}
           aws-region: ${{ secrets.AWS_REGION }}
         # ----------------------------------------------------
       # Get RDS Networking Details
