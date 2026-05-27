@@ -17,7 +17,7 @@ jobs:
     with:
       glue_job_name: sales-glue-job
       s3_bucket_name: glue-etl-mlops-pipeline
-      iam_role_arn: arn:aws:iam::061578311583:role/glue-etl
+      iam_role_arn: arn:aws:iam::061578311583:role/glue-etl-role
       rds_instance_identifier: Glue-Etl
       db_name: glue_demo
       db_username: admin
