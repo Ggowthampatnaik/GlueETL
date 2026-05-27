@@ -19,16 +19,17 @@ jobs:
       NETWORK_CONNECTION_NAME: ${{ inputs.network_connection_name }}
       RDS_INSTANCE_IDENTIFIER: ${{ inputs.rds_instance_identifier }}
 
+    permissions:
+      id-token: write
+      contents: read
     steps:
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          role-to-assume: arn:aws:iam::061578311583:role/github-glue-deploy-role
           aws-region: ${{ secrets.AWS_REGION }}
-
-      # ----------------------------------------------------
+        # ----------------------------------------------------
       # Get RDS Networking Details
       # ----------------------------------------------------
 
