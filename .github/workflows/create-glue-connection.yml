@@ -1,26 +1,50 @@
-name: Create Glue Connection
+name: Create Glue Resources
 
 on:
-  workflow_dispatch:
-
-env:
-  RDS_INSTANCE_IDENTIFIER: Glue-Etl
-  DB_NAME: glue_demo
-  DB_USERNAME: admin
-  GLUE_CONNECTION_NAME: mysql-rds-glue-connection
-  SUBNET_ID: subnet-0fec96bcf7da9adc4
+  workflow_call:
+    inputs:
+      glue_job_name:
+        required: true
+        type: string
+      s3_bucket_name:
+        required: true
+        type: string
+      iam_role_arn:
+        required: true
+        type: string
 
 jobs:
-  create-connection:
+  create-glue:
     runs-on: ubuntu-latest
 
+    env:
+      GLUE_JOB_NAME: ${{ inputs.glue_job_name }}
+      S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
+      IAM_ROLE_ARN: ${{ inputs.iam_role_arn }}
+
+      RDS_INSTANCE_IDENTIFIER: Glue-Etl
+      DB_NAME: glue_demo
+      DB_USERNAME: admin
+      DB_TABLE: glue_demo
+
+      NETWORK_CONNECTION_NAME: mysql-rds-network-connection
+      SECRET_NAME: glue-rds-mysql-secret
+      SUBNET_ID: subnet-0fec96bcf7da9adc4
+
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload Glue Script
+        run: |
+          aws s3 cp glue/glue_job.py s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
 
       - name: Get RDS Details
         run: |
@@ -45,31 +69,45 @@ jobs:
             --port 3306 \
             --source-group "$RDS_SG_ID" || true
 
-      - name: Delete Existing Glue Connection
-        run: |
-          aws glue delete-connection \
-            --connection-name "$GLUE_CONNECTION_NAME" || true
-
-      - name: Validate DB Password Length
-        run: |
-          echo "Password length: ${#DB_PASSWORD}"
-        env:
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-
-      - name: Create Glue Connection
+      - name: Create or Update Secrets Manager Secret
         env:
           DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
         run: |
-          cat > glue_connection.json <<EOF
+          cat > secret.json <<EOF
+          {
+            "host": "$RDS_ENDPOINT",
+            "port": 3306,
+            "database": "$DB_NAME",
+            "username": "$DB_USERNAME",
+            "password": "$DB_PASSWORD_SECRET"
+          }
+          EOF
+
+          if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" 2>/dev/null; then
+            aws secretsmanager put-secret-value \
+              --secret-id "$SECRET_NAME" \
+              --secret-string file://secret.json
+          else
+            aws secretsmanager create-secret \
+              --name "$SECRET_NAME" \
+              --secret-string file://secret.json
+          fi
+
+      - name: Delete Old JDBC Glue Connection
+        run: |
+          aws glue delete-connection \
+            --connection-name mysql-rds-glue-connection || true
+
+      - name: Create Network Glue Connection
+        run: |
+          aws glue delete-connection \
+            --connection-name "$NETWORK_CONNECTION_NAME" || true
+
+          cat > network_connection.json <<EOF
           {
             "ConnectionInput": {
-              "Name": "$GLUE_CONNECTION_NAME",
-              "ConnectionType": "JDBC",
-              "ConnectionProperties": {
-                "JDBC_CONNECTION_URL": "jdbc:mysql://$RDS_ENDPOINT:3306/$DB_NAME",
-                "USERNAME": "$DB_USERNAME",
-                "PASSWORD": "$DB_PASSWORD_SECRET"
-              },
+              "Name": "$NETWORK_CONNECTION_NAME",
+              "ConnectionType": "NETWORK",
               "PhysicalConnectionRequirements": {
                 "SubnetId": "$SUBNET_ID",
                 "SecurityGroupIdList": ["$RDS_SG_ID"]
@@ -77,21 +115,31 @@ jobs:
             }
           }
           EOF
-      
-          aws glue delete-connection \
-            --connection-name "$GLUE_CONNECTION_NAME" || true
-      
+
           aws glue create-connection \
-            --cli-input-json file://glue_connection.json
+            --cli-input-json file://network_connection.json
 
-      - name: Wait After Connection Creation
+      - name: Create Glue Job
         run: |
-          sleep 60
+          aws glue delete-job --job-name "$GLUE_JOB_NAME" || true
 
-      - name: Verify Glue Connection
+          aws glue create-job \
+            --name "$GLUE_JOB_NAME" \
+            --role "$IAM_ROLE_ARN" \
+            --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
+            --glue-version "5.0" \
+            --worker-type "G.1X" \
+            --number-of-workers 2 \
+            --connections Connections="$NETWORK_CONNECTION_NAME" \
+            --default-arguments "{
+              \"--job-language\":\"python\",
+              \"--secret_name\":\"$SECRET_NAME\",
+              \"--db_table\":\"$DB_TABLE\",
+              \"--output_path\":\"s3://$S3_BUCKET_NAME/output/\"
+            }"
+
+      - name: Verify Glue Job Connection
         run: |
-          aws glue get-connection \
-            --name "$GLUE_CONNECTION_NAME" \
-            --query "Connection.[Name,ConnectionType,ConnectionProperties,PhysicalConnectionRequirements]"
-
-            
+          aws glue get-job \
+            --job-name "$GLUE_JOB_NAME" \
+            --query "Job.Connections"
