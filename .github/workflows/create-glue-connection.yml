@@ -118,7 +118,7 @@ jobs:
             aws glue create-connection \
               --cli-input-json file://network_connection.json
 
-          fi
+            fi
 
       # ----------------------------------------------------
       # Verify Connection
