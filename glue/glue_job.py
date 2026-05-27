@@ -4,6 +4,7 @@ from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
+from pyspark.sql.functions import col
 
 args = getResolvedOptions(
     sys.argv,
@@ -19,13 +20,10 @@ args = getResolvedOptions(
 )
 
 sc = SparkContext()
-
 glueContext = GlueContext(sc)
-
 spark = glueContext.spark_session
 
 job = Job(glueContext)
-
 job.init(args["JOB_NAME"], args)
 
 print("Glue Job Started")
@@ -41,7 +39,7 @@ connection_properties = {
     "driver": "com.mysql.cj.jdbc.Driver"
 }
 
-print("Reading MySQL Table")
+print("Reading MySQL table")
 
 df = spark.read.jdbc(
     url=jdbc_url,
@@ -49,15 +47,26 @@ df = spark.read.jdbc(
     properties=connection_properties
 )
 
+print("Original data")
 df.show()
 
-print("Writing Output to S3")
+print("Adding 1 to quantity")
 
-df.write \
+transformed_df = df.withColumn(
+    "quantity",
+    col("quantity").cast("int") + 1
+)
+
+print("Transformed data")
+transformed_df.show()
+
+print("Writing transformed data to S3")
+
+transformed_df.write \
     .mode("overwrite") \
     .option("header", "true") \
     .csv(args["output_path"])
 
-print("Glue Job Completed")
+print("Glue Job Completed Successfully")
 
 job.commit()
