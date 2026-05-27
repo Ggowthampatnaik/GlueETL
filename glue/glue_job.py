@@ -1,53 +1,40 @@
 import sys
+from awsglue.transforms import *
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
 from awsglue.context import GlueContext
 from awsglue.job import Job
-from pyspark.sql.functions import col
 
-args = getResolvedOptions(
-    sys.argv,
-    [
-        "JOB_NAME",
-        "rds_endpoint",
-        "db_name",
-        "db_username",
-        "db_password"
-    ]
-)
+args = getResolvedOptions(sys.argv, ['JOB_NAME'])
 
 sc = SparkContext()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
 
 job = Job(glueContext)
-job.init(args["JOB_NAME"], args)
+job.init(args['JOB_NAME'], args)
 
 print("Glue Job Started")
 
-jdbc_url = f"jdbc:mysql://{args['rds_endpoint']}:3306/{args['db_name']}"
-
-connection_properties = {
-    "user": args["db_username"],
-    "password": args["db_password"],
-    "driver": "com.mysql.cj.jdbc.Driver"
-}
-
-df = spark.read.jdbc(
-    url=jdbc_url,
-    table="glue_demo",
-    properties=connection_properties
+mysql_df = glueContext.create_dynamic_frame.from_options(
+    connection_type="mysql",
+    connection_options={
+        "useConnectionProperties": "true",
+        "dbtable": "glue_demo",
+        "connectionName": "mysql-rds-glue-connection",
+    },
+    transformation_ctx="mysql_df"
 )
 
-print("MySQL Table Loaded")
-df.show()
+print("MySQL Data Loaded")
+mysql_df.show()
 
-transformed_df = df.withColumn(
+spark_df = mysql_df.toDF()
+
+transformed_df = spark_df.withColumn(
     "total_price",
-    col("quantity").cast("int") * col("price").cast("double")
+    spark_df["quantity"].cast("int") * spark_df["price"].cast("double")
 )
-
-transformed_df.show()
 
 output_path = "s3://glue-etl-mlops-pipeline/output/"
 
