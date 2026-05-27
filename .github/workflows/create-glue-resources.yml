@@ -111,7 +111,9 @@ jobs:
               "ConnectionProperties": {},
               "PhysicalConnectionRequirements": {
                 "SubnetId": "$SUBNET_ID",
-                "SecurityGroupIdList": ["$RDS_SG_ID"]
+                "SecurityGroupIdList": ["$RDS_SG_ID"],
+                "AvailabilityZone": "$SUBNET_AZ"
+
               }
             }
           }
