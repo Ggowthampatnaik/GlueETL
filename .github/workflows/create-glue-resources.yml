@@ -12,6 +12,21 @@ on:
       iam_role_arn:
         required: true
         type: string
+      rds_instance_identifier:
+        required: true
+        type: string
+      db_name:
+        required: true
+        type: string
+      db_username:
+        required: true
+        type: string
+      db_table:
+        required: true
+        type: string
+      network_connection_name:
+        required: true
+        type: string
 
 jobs:
   create-glue:
@@ -21,12 +36,11 @@ jobs:
       GLUE_JOB_NAME: ${{ inputs.glue_job_name }}
       S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
       IAM_ROLE_ARN: ${{ inputs.iam_role_arn }}
-
-      RDS_INSTANCE_IDENTIFIER: Glue-Etl
-      DB_NAME: glue_demo
-      DB_USERNAME: admin
-      DB_TABLE: glue_demo
-      NETWORK_CONNECTION_NAME: mysql-rds-network-connection
+      RDS_INSTANCE_IDENTIFIER: ${{ inputs.rds_instance_identifier }}
+      DB_NAME: ${{ inputs.db_name }}
+      DB_USERNAME: ${{ inputs.db_username }}
+      DB_TABLE: ${{ inputs.db_table }}
+      NETWORK_CONNECTION_NAME: ${{ inputs.network_connection_name }}
 
     steps:
       - name: Checkout Repository
