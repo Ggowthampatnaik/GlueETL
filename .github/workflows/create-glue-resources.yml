@@ -109,20 +109,29 @@ jobs:
             --job-name "$GLUE_JOB_NAME" || true
 
       - name: Create Glue Job
+        env:
+          DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
+      
         run: |
-
+      
+          aws glue delete-job \
+            --job-name "$GLUE_JOB_NAME" || true
+      
           aws glue create-job \
             --name "$GLUE_JOB_NAME" \
             --role "$IAM_ROLE_ARN" \
             --command "Name=glueetl,ScriptLocation=s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py,PythonVersion=3" \
             --glue-version "5.0" \
             --worker-type "G.1X" \
-            --number-of-workers 2 \
+            --number-of-workers 1 \
             --connections Connections="$NETWORK_CONNECTION_NAME" \
             --default-arguments "{
               \"--job-language\":\"python\",
-              \"--secret_name\":\"$SECRET_NAME\",
-              \"--db_table\":\"$DB_TABLE\",
+              \"--rds_endpoint\":\"$RDS_ENDPOINT\",
+              \"--db_name\":\"glue_demo\",
+              \"--db_username\":\"admin\",
+              \"--db_password\":\"$DB_PASSWORD_SECRET\",
+              \"--db_table\":\"glue_demo\",
               \"--output_path\":\"s3://$S3_BUCKET_NAME/output/\"
             }"
 
