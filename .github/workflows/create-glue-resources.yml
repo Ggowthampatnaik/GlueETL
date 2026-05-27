@@ -21,7 +21,15 @@ jobs:
       GLUE_JOB_NAME: ${{ inputs.glue_job_name }}
       S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
       IAM_ROLE_ARN: ${{ inputs.iam_role_arn }}
-      GLUE_CONNECTION_NAME: mysql-rds-glue-connection
+
+      RDS_INSTANCE_IDENTIFIER: Glue-Etl
+      DB_NAME: glue_demo
+      DB_USERNAME: admin
+      DB_TABLE: glue_demo
+
+      NETWORK_CONNECTION_NAME: mysql-rds-network-connection
+      SECRET_NAME: glue-rds-mysql-secret
+      SUBNET_ID: subnet-0fec96bcf7da9adc4
 
     steps:
       - name: Checkout Repository
@@ -38,11 +46,78 @@ jobs:
         run: |
           aws s3 cp glue/glue_job.py s3://$S3_BUCKET_NAME/glue-scripts/glue_job.py
 
-      - name: Verify Existing Glue Connection
+      - name: Get RDS Details
         run: |
-          aws glue get-connection \
-            --name "$GLUE_CONNECTION_NAME" \
-            --query "Connection.[Name,ConnectionType,PhysicalConnectionRequirements]"
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].Endpoint.Address" \
+            --output text)
+
+          RDS_SG_ID=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+            --output text)
+
+          echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
+          echo "RDS_SG_ID=$RDS_SG_ID" >> $GITHUB_ENV
+
+      - name: Allow RDS Security Group Self Access
+        run: |
+          aws ec2 authorize-security-group-ingress \
+            --group-id "$RDS_SG_ID" \
+            --protocol tcp \
+            --port 3306 \
+            --source-group "$RDS_SG_ID" || true
+
+      - name: Create or Update Secrets Manager Secret
+        env:
+          DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
+        run: |
+          cat > secret.json <<EOF
+          {
+            "host": "$RDS_ENDPOINT",
+            "port": 3306,
+            "database": "$DB_NAME",
+            "username": "$DB_USERNAME",
+            "password": "$DB_PASSWORD_SECRET"
+          }
+          EOF
+
+          if aws secretsmanager describe-secret --secret-id "$SECRET_NAME" 2>/dev/null; then
+            aws secretsmanager put-secret-value \
+              --secret-id "$SECRET_NAME" \
+              --secret-string file://secret.json
+          else
+            aws secretsmanager create-secret \
+              --name "$SECRET_NAME" \
+              --secret-string file://secret.json
+          fi
+
+      - name: Delete Old JDBC Glue Connection
+        run: |
+          aws glue delete-connection \
+            --connection-name mysql-rds-glue-connection || true
+
+      - name: Create Network Glue Connection
+        run: |
+          aws glue delete-connection \
+            --connection-name "$NETWORK_CONNECTION_NAME" || true
+
+          cat > network_connection.json <<EOF
+          {
+            "ConnectionInput": {
+              "Name": "$NETWORK_CONNECTION_NAME",
+              "ConnectionType": "NETWORK",
+              "PhysicalConnectionRequirements": {
+                "SubnetId": "$SUBNET_ID",
+                "SecurityGroupIdList": ["$RDS_SG_ID"]
+              }
+            }
+          }
+          EOF
+
+          aws glue create-connection \
+            --cli-input-json file://network_connection.json
 
       - name: Create Glue Job
         run: |
@@ -55,8 +130,13 @@ jobs:
             --glue-version "5.0" \
             --worker-type "G.1X" \
             --number-of-workers 2 \
-            --connections Connections=mysql-rds-glue-connection \
-            --default-arguments '{"--job-language":"python"}'
+            --connections Connections="$NETWORK_CONNECTION_NAME" \
+            --default-arguments "{
+              \"--job-language\":\"python\",
+              \"--secret_name\":\"$SECRET_NAME\",
+              \"--db_table\":\"$DB_TABLE\",
+              \"--output_path\":\"s3://$S3_BUCKET_NAME/output/\"
+            }"
 
       - name: Verify Glue Job Connection
         run: |
