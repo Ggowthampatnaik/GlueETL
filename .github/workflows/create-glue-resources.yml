@@ -197,3 +197,9 @@ jobs:
             --number-of-workers 2 \
             --connections Connections=mysql-rds-glue-connection \
             --default-arguments '{"--job-language":"python"}'
+
+      - name: Verify Glue Job Connection
+        run: |
+          aws glue get-job \
+            --job-name sales-glue-job \
+            --query "Job.Connections"
