@@ -100,8 +100,25 @@ jobs:
 
       - name: Create Network Glue Connection
         run: |
+          NETWORK_CONNECTION_NAME="mysql-rds-network-connection"
+          SUBNET_ID="subnet-0fec96bcf7da9adc4"
+      
           aws glue delete-connection \
             --connection-name "$NETWORK_CONNECTION_NAME" || true
+      
+          RDS_SG_ID=$(aws rds describe-db-instances \
+            --db-instance-identifier Glue-Etl \
+            --query "DBInstances[0].VpcSecurityGroups[0].VpcSecurityGroupId" \
+            --output text)
+      
+          SUBNET_AZ=$(aws ec2 describe-subnets \
+            --subnet-ids "$SUBNET_ID" \
+            --query "Subnets[0].AvailabilityZone" \
+            --output text)
+      
+          echo "SUBNET_ID=$SUBNET_ID"
+          echo "SUBNET_AZ=$SUBNET_AZ"
+          echo "RDS_SG_ID=$RDS_SG_ID"
       
           cat > network_connection.json <<EOF
           {
@@ -113,7 +130,6 @@ jobs:
                 "SubnetId": "$SUBNET_ID",
                 "SecurityGroupIdList": ["$RDS_SG_ID"],
                 "AvailabilityZone": "$SUBNET_AZ"
-
               }
             }
           }
