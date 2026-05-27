@@ -1,4 +1,4 @@
-name: Run Glue Job SQL
+name: Run Glue Job
 
 on:
   workflow_call:
@@ -12,21 +12,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
-
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # ----------------------------------------------------
-      # Run Glue Job
-      # ----------------------------------------------------
-
       - name: Start Glue Job
         run: |
-
           aws glue start-job-run \
             --job-name "${{ inputs.glue_job_name }}"
