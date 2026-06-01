@@ -27,12 +27,15 @@ job.init(args["JOB_NAME"], args)
 
 print("Glue Job Started")
 
-
 def establish_connection_rds():
+    print("Getting RDS secret", flush=True)
+
     secret_id = args["secret_id_rds"]
 
     sm_client = boto3.client("secretsmanager")
     response = sm_client.get_secret_value(SecretId=secret_id)
+
+    print("Secret retrieved", flush=True)
 
     values = json.loads(response["SecretString"])
 
@@ -42,7 +45,12 @@ def establish_connection_rds():
     username = values["username"]
     password = values["password"]
 
-    jdbc_url = f"jdbc:mysql://{host}:{port}/{dbname}?useSSL=false"
+    jdbc_url = (
+        f"jdbc:mysql://{host}:{port}/{dbname}"
+        "?useSSL=false"
+        "&connectTimeout=10000"
+        "&socketTimeout=30000"
+    )
 
     connection_properties = {
         "user": username,
@@ -50,10 +58,9 @@ def establish_connection_rds():
         "driver": "com.mysql.cj.jdbc.Driver"
     }
 
-    print("RDS connection details loaded from Secrets Manager")
+    print("JDBC URL created", flush=True)
 
     return jdbc_url, connection_properties
-
 
 jdbc_url, connection_properties = establish_connection_rds()
 
