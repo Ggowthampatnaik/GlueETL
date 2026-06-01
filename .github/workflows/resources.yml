@@ -1,9 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Glue Job resource for RDS to S3 extraction
-Parameters:
-  DbPassword:
-    Type: String
-    NoEcho: true
+
 Mappings:
   EnvironmentMapping:
     "061578311583":
