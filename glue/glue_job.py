@@ -38,8 +38,8 @@ def establish_connection_rds():
 
     host = values["host"]
     port = values["port"]
-    dbname = values["db"]
-    username = values["user"]
+    dbname = values["database"]
+    username = values["username"]
     password = values["password"]
 
     jdbc_url = f"jdbc:mysql://{host}:{port}/{dbname}?useSSL=false"
