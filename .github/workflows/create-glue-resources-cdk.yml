@@ -1,0 +1,112 @@
+name: Create Glue Resources
+
+on:
+  workflow_call:
+    inputs:
+      glue_job_name:
+        required: true
+        type: string
+      s3_bucket_name:
+        required: true
+        type: string
+      iam_role_arn:
+        required: true
+        type: string
+      rds_instance_identifier:
+        required: true
+        type: string
+      db_name:
+        required: true
+        type: string
+      db_username:
+        required: true
+        type: string
+      db_table:
+        required: true
+        type: string
+      network_connection_name:
+        required: true
+        type: string
+      script_location:
+        required: true
+        type: string
+      output_path:
+        required: true
+        type: string
+      github_role_arn:
+        required: true
+        type: string
+
+jobs:
+  create-glue:
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      GLUE_JOB_NAME: ${{ inputs.glue_job_name }}
+      S3_BUCKET_NAME: ${{ inputs.s3_bucket_name }}
+      IAM_ROLE_ARN: ${{ inputs.iam_role_arn }}
+      RDS_INSTANCE_IDENTIFIER: ${{ inputs.rds_instance_identifier }}
+      DB_NAME: ${{ inputs.db_name }}
+      DB_USERNAME: ${{ inputs.db_username }}
+      DB_TABLE: ${{ inputs.db_table }}
+      NETWORK_CONNECTION_NAME: ${{ inputs.network_connection_name }}
+      SCRIPT_LOCATION: ${{ inputs.script_location }}
+      OUTPUT_PATH: ${{ inputs.output_path }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ inputs.github_role_arn }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Upload Glue Script
+        run: |
+          aws s3 cp glue/glue_job.py "$SCRIPT_LOCATION"
+
+      - name: Get RDS Endpoint
+        run: |
+          RDS_ENDPOINT=$(aws rds describe-db-instances \
+            --db-instance-identifier "$RDS_INSTANCE_IDENTIFIER" \
+            --query "DBInstances[0].Endpoint.Address" \
+            --output text)
+
+          echo "RDS_ENDPOINT=$RDS_ENDPOINT" >> $GITHUB_ENV
+
+      - name: Verify Network Connection Exists
+        run: |
+          aws glue get-connection \
+            --name "$NETWORK_CONNECTION_NAME"
+
+      - name: Deploy Glue Job using CloudFormation
+        env:
+          DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
+        run: |
+          aws cloudformation deploy \
+            --template-file resources.yml \
+            --stack-name "$GLUE_JOB_NAME-stack" \
+            --capabilities CAPABILITY_NAMED_IAM \
+            --parameter-overrides \
+              GlueJobName="$GLUE_JOB_NAME" \
+              GlueRoleArn="$IAM_ROLE_ARN" \
+              NetworkConnectionName="$NETWORK_CONNECTION_NAME" \
+              ScriptLocation="$SCRIPT_LOCATION" \
+              OutputPath="$OUTPUT_PATH" \
+              RdsEndpoint="$RDS_ENDPOINT" \
+              DbName="$DB_NAME" \
+              DbUsername="$DB_USERNAME" \
+              DbPassword="$DB_PASSWORD_SECRET" \
+              DbTable="$DB_TABLE"
+
+      - name: Verify Glue Job
+        run: |
+          aws glue get-job \
+            --job-name "$GLUE_JOB_NAME" \
+            --query "Job.[Name,Role,GlueVersion,Connections]"
