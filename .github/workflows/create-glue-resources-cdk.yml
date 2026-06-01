@@ -90,7 +90,7 @@ jobs:
           DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
         run: |
           aws cloudformation deploy \
-            --template-file resources.yml \
+            --template-file .github/workflows/resources.yml \
             --stack-name "$GLUE_JOB_NAME-stack" \
             --capabilities CAPABILITY_NAMED_IAM \
             --parameter-overrides \
