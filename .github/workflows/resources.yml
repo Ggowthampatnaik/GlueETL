@@ -1,6 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Glue Job resource for RDS to S3 extraction
-
+Parameters:
+  DbPassword:
+    Type: String
+    NoEcho: true
 Mappings:
   EnvironmentMapping:
     "061578311583":
@@ -14,7 +17,7 @@ Mappings:
       RdsEndpoint: "glue-etl.coxaq2qcy3l9.us-east-1.rds.amazonaws.com"
       DbName: "glue_demo"
       DbUsername: "admin"
-      DbPassword: "YOUR_DB_PASSWORD_HERE"
+      
       DbTable: "glue_demo"
 
 Resources:
@@ -41,7 +44,7 @@ Resources:
         "--rds_endpoint": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", RdsEndpoint]
         "--db_name": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbName]
         "--db_username": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbUsername]
-        "--db_password": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbPassword]
+        "--db_password": !Ref DbPassword
         "--db_table": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbTable]
         "--output_path": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", OutputPath]
 
