@@ -17,7 +17,7 @@ jobs:
 
   create-glue-resources:
     needs: create-glue-connection
-    uses: ./.github/workflows/create-glue-resources.yml
+    uses: ./.github/workflows/create-glue-resources-cdk.yml
     with:
       glue_job_name: sales-glue-job
       s3_bucket_name: glue-etl-mlops-pipeline
