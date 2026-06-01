@@ -1,67 +1,55 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Glue Job resource for RDS to S3 extraction
 
-Parameters:
-  GlueJobName:
-    Type: String
-
-  GlueRoleArn:
-    Type: String
-
-  NetworkConnectionName:
-    Type: String
-
-  ScriptLocation:
-    Type: String
-
-  OutputPath:
-    Type: String
-
-  RdsEndpoint:
-    Type: String
-
-  DbName:
-    Type: String
-
-  DbUsername:
-    Type: String
-
-  DbPassword:
-    Type: String
-    NoEcho: true
-
-  DbTable:
-    Type: String
+Mappings:
+  EnvironmentMapping:
+    "061578311583":
+      Env: "Dev"
+      EnvLower: "dev"
+      GlueJobName: "sales-glue-job"
+      GlueRoleArn: "arn:aws:iam::061578311583:role/glue-etl-role"
+      NetworkConnectionName: "mysql-rds-network-connection"
+      ScriptLocation: "s3://glue-etl-mlops-pipeline/glue-scripts/glue_job.py"
+      OutputPath: "s3://glue-etl-mlops-pipeline/output/"
+      RdsEndpoint: "glue-etl.coxaq2qcy3l9.us-east-1.rds.amazonaws.com"
+      DbName: "glue_demo"
+      DbUsername: "admin"
+      DbPassword: "YOUR_DB_PASSWORD_HERE"
+      DbTable: "glue_demo"
 
 Resources:
   GlueETLJob:
     Type: AWS::Glue::Job
     Properties:
-      Name: !Ref GlueJobName
-      Role: !Ref GlueRoleArn
+      Name: !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", GlueJobName]
+      Role: !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", GlueRoleArn]
       GlueVersion: "5.0"
       WorkerType: G.1X
       NumberOfWorkers: 2
 
       Command:
         Name: glueetl
-        ScriptLocation: !Ref ScriptLocation
+        ScriptLocation: !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", ScriptLocation]
         PythonVersion: "3"
 
       Connections:
         Connections:
-          - !Ref NetworkConnectionName
+          - !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", NetworkConnectionName]
 
       DefaultArguments:
         "--job-language": "python"
-        "--rds_endpoint": !Ref RdsEndpoint
-        "--db_name": !Ref DbName
-        "--db_username": !Ref DbUsername
-        "--db_password": !Ref DbPassword
-        "--db_table": !Ref DbTable
-        "--output_path": !Ref OutputPath
+        "--rds_endpoint": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", RdsEndpoint]
+        "--db_name": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbName]
+        "--db_username": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbUsername]
+        "--db_password": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbPassword]
+        "--db_table": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbTable]
+        "--output_path": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", OutputPath]
 
 Outputs:
+  Environment:
+    Description: Environment Name
+    Value: !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", Env]
+
   GlueJobName:
     Description: Glue Job Name
     Value: !Ref GlueETLJob
