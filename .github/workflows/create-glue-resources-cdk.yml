@@ -88,9 +88,11 @@ jobs:
       - name: Deploy Glue Job using CloudFormation
         run: |
           aws cloudformation deploy \
-            --template-file resources.yml \
-            --stack-name "$GLUE_JOB_NAME-stack" \
-            --capabilities CAPABILITY_NAMED_IAM
+          --template-file .github/workflows/resources.yml \
+          --stack-name "$GLUE_JOB_NAME-stack" \
+          --capabilities CAPABILITY_NAMED_IAM \
+          --parameter-overrides \
+            DbPassword="${{ secrets.DB_PASSWORD }}"
 
       - name: Verify Glue Job
         run: |
