@@ -14,11 +14,10 @@ Mappings:
       NetworkConnectionName: "mysql-rds-network-connection"
       ScriptLocation: "s3://glue-etl-mlops-pipeline/glue-scripts/glue_job.py"
       OutputPath: "s3://glue-etl-mlops-pipeline/output/"
-      RdsEndpoint: "glue-etl.coxaq2qcy3l9.us-east-1.rds.amazonaws.com"
-      DbName: "glue_demo"
-      DbUsername: "admin"
-      
+
+      SecretIdRds: "glue-demo-db-password"
       DbTable: "glue_demo"
+
 
 Resources:
   GlueETLJob:
@@ -41,10 +40,7 @@ Resources:
 
       DefaultArguments:
         "--job-language": "python"
-        "--rds_endpoint": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", RdsEndpoint]
-        "--db_name": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbName]
-        "--db_username": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbUsername]
-        "--db_password": !Ref DbPassword
+        "--secret_id_rds": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", SecretIdRds]
         "--db_table": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbTable]
         "--output_path": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", OutputPath]
 
