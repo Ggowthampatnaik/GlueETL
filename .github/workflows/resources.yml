@@ -15,7 +15,7 @@ Mappings:
       ScriptLocation: "s3://glue-etl-mlops-pipeline/glue-scripts/glue_job.py"
       OutputPath: "s3://glue-etl-mlops-pipeline/output/"
 
-      SecretIdRds: "glue-demo-db-password"
+      SecretIdRds: "glue-rds-mysql-secret"
       DbTable: "glue_demo"
 
 
