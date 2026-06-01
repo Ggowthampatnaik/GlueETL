@@ -41,7 +41,7 @@ def establish_connection_rds():
 
     host = values["host"]
     port = values["port"]
-    dbname = values["database"]
+    dbname = values["dbname"]
     username = values["username"]
     password = values["password"]
 
