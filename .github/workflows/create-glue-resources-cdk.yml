@@ -86,24 +86,11 @@ jobs:
             --name "$NETWORK_CONNECTION_NAME"
 
       - name: Deploy Glue Job using CloudFormation
-        env:
-          DB_PASSWORD_SECRET: ${{ secrets.DB_PASSWORD }}
         run: |
           aws cloudformation deploy \
-            --template-file .github/workflows/resources.yml \
+            --template-file resources.yml \
             --stack-name "$GLUE_JOB_NAME-stack" \
-            --capabilities CAPABILITY_NAMED_IAM \
-            --parameter-overrides \
-              GlueJobName="$GLUE_JOB_NAME" \
-              GlueRoleArn="$IAM_ROLE_ARN" \
-              NetworkConnectionName="$NETWORK_CONNECTION_NAME" \
-              ScriptLocation="$SCRIPT_LOCATION" \
-              OutputPath="$OUTPUT_PATH" \
-              RdsEndpoint="$RDS_ENDPOINT" \
-              DbName="$DB_NAME" \
-              DbUsername="$DB_USERNAME" \
-              DbPassword="$DB_PASSWORD_SECRET" \
-              DbTable="$DB_TABLE"
+            --capabilities CAPABILITY_NAMED_IAM
 
       - name: Verify Glue Job
         run: |
