@@ -90,9 +90,8 @@ jobs:
           aws cloudformation deploy \
           --template-file .github/workflows/resources.yml \
           --stack-name "$GLUE_JOB_NAME-stack" \
-          --capabilities CAPABILITY_NAMED_IAM \
-          --parameter-overrides \
-            DbPassword="${{ secrets.DB_PASSWORD }}"
+          --capabilities CAPABILITY_NAMED_IAM 
+
 
       - name: Verify Glue Job
         run: |
