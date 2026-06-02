@@ -1,0 +1,44 @@
+name: Deploy Glue Job Stack
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        default: "dev"
+        description: which GH environment to use
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+
+      region:
+        default: "us-east-1"
+        description: which region to deploy
+        type: choice
+        options:
+          - us-east-1
+          - us-east-2
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+env:
+  ENVIRONMENT: ${{ inputs.environment || 'dev' }}
+  AWS_REGION: ${{ inputs.region || 'us-east-1' }}
+  STACK_NAME: StoreOpsGlueJobStack
+
+jobs:
+  deploy_glue_job_cdk_stack:
+    uses: ./.github/workflows/new-generic_cdk_deploy.yml
+
+    secrets: inherit
+
+    with:
+      deploy_environment: ${{ inputs.environment }}
+      stack_name: StoreOpsGlueJobStack
+      aws_region: ${{ inputs.region }}
+      cdk_working_dir: "Common/iac/glue_job"
+      deploy_args: "--parameters StoreOpsGlueJobStack:DbPassword=${{ secrets.DB_PASSWORD }}"
