@@ -62,19 +62,19 @@
     "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": true,
     "@aws-cdk/aws-codepipeline:defaultPipelineTypeToV2": true,
     "dev": {
-      "region": "us-east-2",
+      "region": "us-east-1",
       "environment": "dev",
-      "account_id": "002456329467"
+      "account_id": "061578311583"
     },
     "test": {
-      "region": "us-east-2",
+      "region": "us-east-1",
       "environment": "test",
-      "account_id": "043719350839"
+      "account_id": "061578311583"
     },
     "prod": {
-      "region": "us-east-2",
+      "region": "us-east-1",
       "environment": "prod",
-      "account_id": "604349250746"
+      "account_id": "061578311583"
     }
   }
 }
