@@ -1,0 +1,19 @@
+{
+  "app": "python3 app.py",
+  "context": {
+    "dev": {
+      "region": "us-east-1",
+      "environment": "dev",
+      "account_id": "061578311583",
+      "glue_job_name": "sales-glue-job",
+      "glue_role_arn": "arn:aws:iam::061578311583:role/glue-etl-role",
+      "network_connection_name": "Redshift-Network",
+      "s3_bucket_name": "glue-etl-mlops-pipeline",
+      "output_path": "s3://glue-etl-mlops-pipeline/output/",
+      "rds_endpoint": "glue-etl.coxaq2qcy3l9.us-east-1.rds.amazonaws.com",
+      "db_name": "glue_demo",
+      "db_username": "admin",
+      "db_table": "glue_demo"
+    }
+  }
+}
