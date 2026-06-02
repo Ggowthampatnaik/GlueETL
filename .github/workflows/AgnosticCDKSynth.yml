@@ -1,0 +1,231 @@
+name: Agnostic CDK Synth
+
+# @description build cdk IAC with parameters that should work for most languages and tools
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: which GH environment to use
+        type: string
+      runsOn:
+        default: ubuntu-latest
+        description: Platform to execute on
+        type: string
+      workingDirectory:
+        type: string
+        default: "./"
+        description: "specify starting directory"
+
+      repository:
+        type: string
+        description: "Repository to synth. Only set this if you're doing cross-repo synthing."
+        default: ""
+        required: false
+      branch:
+        type: string
+        description: "branch/ref of repository to use"
+        default: ""
+        required: false
+
+      cdkVersion:
+        default: 2.x
+        description: what version of aws cloud development kit to use
+        type: string
+      nodeVersion:
+        default: 20.x
+        description: what version of nodejs to use
+        type: string
+
+      AWSRoleToAssume:
+        description: AWS role ARN to assume. Should have a corresponding trust policy
+        type: string
+      AWSRegion:
+        default: us-east-2
+        description: Which region to use in AWS. Signet standard is us-east-2
+        type: string
+      AWSRoleDurationSeconds:
+        default: "900"
+        description: How long your AWS role will be good. Must be between 900 and 43200.s
+        type: string
+      AWSRoleSessionName:
+        default: github-action-assumed-role
+        description: A "role session friendly name" to make deciphering logs easier
+        type: string
+      AWSMaskAccountId:
+        default: true
+        description: Whether to mask or not mask the AWS Account ID
+        type: boolean
+
+      inputArtifactPath:
+        default: ./artifact
+        description: Where to store the downloaded artifact
+        type: string
+      inputArtifactDownloadName:
+        description: Name of the artifact to download
+        type: string
+
+      outputArtifactUploadName:
+        description: The name of the artifact to upload.
+        type: string
+        required: true
+      outputArtifactRetention:
+        default: "5"
+        description: How long in days to keep the github action artifact
+        type: string
+
+      installCommand:
+        description: Command to install dependencies
+        type: string
+      preBuildCommand:
+        description: Commands to run before build
+        type: string
+      stackName:
+        description: Name of the CDK Stack to synth
+        type: string
+        required: false
+      synthArgs:
+        description: Additional Args to pass to cdk synth
+        required: false
+        type: string
+
+      enableGitLFS:
+        default: false
+        description: Enable Git LFS file checkout and pulling
+        type: boolean
+
+      allowDelicateChanges:
+        default: false
+        description: Whether to allow potentially dangerous changes
+        type: boolean
+
+    secrets:
+      githubArtifactToken:
+        description: "Optional Auth token to package repositories"
+        required: false
+      githubToken:
+        required: true
+        description: The GitHub token to be used for authentication to github
+      orcaSecurityApiToken:
+        description: "Orca Security API Token"
+        required: true
+      orcaProjectKey:
+        description: "DEPRECATED! Will now be auto-configured if not specified."
+        required: false
+
+env:
+  GH_RUN_NUM: ${{ github.run_number }}
+  ENVIRONMENT: ${{ inputs.environment }}
+  ARTIFACT_TOKEN: ${{ secrets.githubArtifactToken }}
+  ORCA_PROJECT_KEY: ${{ secrets.orcaProjectKey }}
+
+jobs:
+  synth:
+    runs-on: ${{ inputs.runsOn }}
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.workingDirectory }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.repository }}
+          ref: ${{ inputs.branch }}
+          lfs: ${{ inputs.enableGitLFS }}
+          token: ${{ inputs.repository == '' && secrets.GITHUB_TOKEN || secrets.githubToken }}
+
+      - name: Pull LFS files
+        if: ${{ inputs.enableGitLFS }}
+        run: git lfs pull
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ inputs.AWSRoleToAssume }}
+        with:
+          aws-region: ${{ inputs.AWSRegion }}
+          role-duration-seconds: ${{ inputs.AWSRoleDurationSeconds }}
+          role-session-name: ${{ inputs.AWSRoleSessionName }}
+          role-to-assume: ${{ inputs.AWSRoleToAssume }}
+          mask-aws-account-id: ${{ inputs.AWSMaskAccountId }}
+
+      - name: Download Artifact
+        if: ${{ inputs.inputArtifactDownloadName }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.inputArtifactDownloadName }}
+          path: ${{ inputs.inputArtifactPath }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.nodeVersion }}
+
+      - run: npm i -g aws-cdk@${{ inputs.cdkVersion }}
+        name: Install CDK
+
+      - name: Install
+        if: ${{ inputs.installCommand }}
+        run: ${{ inputs.installCommand }}
+
+      - name: preBuild
+        if: ${{ inputs.preBuildCommand }}
+        run: ${{ inputs.preBuildCommand }}
+
+      - name: build
+        run: cdk synth ${{ inputs.synthArgs }} ${{ inputs.stackName }}
+        env:
+          GH_RUN_NUM: ${{ github.run_number }}
+          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: Run Custom IaC Scan
+        run: |
+          python3 scan.py
+
+      - name: Upload Scan Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-report
+          path: scan_report.json
+
+      - name: REVIEW CHANGES HERE
+        run: |
+          cdk diff ${{ inputs.synthArgs }} --progress=events ${{ inputs.stackName }} &> >(tee cdk.log)
+          echo "# CDK Changes" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          awk "/Resources/,/^$/" cdk.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Check for dangerous changes
+        run: |
+          delicate_resources=(
+            "[-] AWS::RDS::DBCluster "
+          )
+          for i in "${delicate_resources[@]}"; do
+            awk "/Resources/,/^$/" cdk.log | grep --fixed-strings "$i" >> delicate_resources.log || true
+          done
+          if [ $(wc -l < "delicate_resources.log") -gt 0 ]; then
+            echo "# Delicate resources affected!" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat delicate_resources.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Fail for dangerous changes
+        if: ${{ inputs.allowDelicateChanges == 'false' }}
+        run: |
+          if [ $(wc -l < "delicate_resources.log") -gt 0 ]; then
+            echo 'If this should not have failed, set the workflow parameter `allowDelicateChanges` to `true`' >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
+        env:
+          GH_RUN_NUM: ${{ github.run_number }}
+          ENVIRONMENT: ${{ inputs.environment }}
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.outputArtifactUploadName }}
+          path: ${{ inputs.workingDirectory }}/cdk.out
+          retention-days: ${{ inputs.outputArtifactRetention }}
+          if-no-files-found: error
