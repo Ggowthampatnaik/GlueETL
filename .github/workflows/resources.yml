@@ -4,7 +4,6 @@ Parameters:
   DbPassword:
     Type: String
     NoEcho: true
-
 Mappings:
   EnvironmentMapping:
     "061578311583":
@@ -12,13 +11,14 @@ Mappings:
       EnvLower: "dev"
       GlueJobName: "sales-glue-job"
       GlueRoleArn: "arn:aws:iam::061578311583:role/glue-etl-role"
-      NetworkConnectionName: "mysql-rds-network-connection"
+      NetworkConnectionName: "Redshift-Network"
       ScriptLocation: "s3://glue-etl-mlops-pipeline/glue-scripts/glue_job.py"
       OutputPath: "s3://glue-etl-mlops-pipeline/output/"
-
-      SecretIdRds: "new-database-secret"
+      RdsEndpoint: "glue-etl.coxaq2qcy3l9.us-east-1.rds.amazonaws.com"
+      DbName: "glue_demo"
+      DbUsername: "admin"
+      
       DbTable: "glue_demo"
-
 
 Resources:
   GlueETLJob:
@@ -47,7 +47,6 @@ Resources:
         "--db_password": !Ref DbPassword
         "--db_table": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbTable]
         "--output_path": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", OutputPath]
-
 
 Outputs:
   Environment:
