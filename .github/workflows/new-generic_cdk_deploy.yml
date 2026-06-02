@@ -109,3 +109,4 @@ jobs:
       cdkVersion: 2.x
       inputArtifactDownloadName: ${{ inputs.deploy_environment }}-infra
       deployArgs: ${{ inputs.stack_name != '' && inputs.stack_name || '--all' }}
+      AWSRegion: ${{ inputs.aws_region }}
