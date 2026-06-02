@@ -31,14 +31,33 @@ env:
   STACK_NAME: StoreOpsGlueJobStack
 
 jobs:
+  set_deployment_environment:
+    runs-on: ubuntu-latest
+
+    outputs:
+      ENVIRONMENT: ${{ steps.assign.outputs.ENVIRONMENT }}
+      AWS_REGION: ${{ steps.assign.outputs.AWS_REGION }}
+      CDK_STACK_NAME: ${{ steps.assign.outputs.STACK_NAME }}
+
+    steps:
+      - name: Assign deployment variables
+        id: assign
+        run: |
+          echo "ENVIRONMENT=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "AWS_REGION=${AWS_REGION}" >> $GITHUB_OUTPUT
+          echo "STACK_NAME=${STACK_NAME}" >> $GITHUB_OUTPUT
+
   deploy_glue_job_cdk_stack:
+    needs:
+      - set_deployment_environment
+
     uses: ./.github/workflows/new-generic_cdk_deploy.yml
 
     secrets: inherit
 
     with:
-      deploy_environment: ${{ inputs.environment }}
-      stack_name: StoreOpsGlueJobStack
-      aws_region: ${{ inputs.region }}
+      deploy_environment: ${{ needs.set_deployment_environment.outputs.ENVIRONMENT }}
+      stack_name: ${{ needs.set_deployment_environment.outputs.CDK_STACK_NAME }}
+      aws_region: ${{ needs.set_deployment_environment.outputs.AWS_REGION }}
       cdk_working_dir: "Common/iac/glue_job"
       deploy_args: "--parameters StoreOpsGlueJobStack:DbPassword=${{ secrets.DB_PASSWORD }}"
