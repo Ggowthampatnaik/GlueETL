@@ -19,13 +19,10 @@ class StoreOpsGlueConnectionsStack(Stack):
 
         env_config = {
             "dev": {
-                "subnet_id_1": Fn.import_value("SignetNetworkBaseline:GLUESubnet2Id"),
-                "subnet_id_2": Fn.import_value("SignetNetworkBaseline:GLUESubnet3Id"),
+                "subnet_id_1": "subnet-0fc890a7571121f58",
+                "subnet_id_2": "subnet-05655f31ed833de3b",
                 "sg": [
-                    "sg-059dccd5283e95420",
-                    "sg-0953e6fc57ff4f6b6",
-                    "sg-09ce0e9461c7af9ff",
-                    "sg-0c384edc21ffbe7bd",
+                    "sg-0c7f49465ab08bd5e"
                 ],
             },
             "test": {
@@ -63,7 +60,7 @@ class StoreOpsGlueConnectionsStack(Stack):
                 physical_connection_requirements=glue.CfnConnection.PhysicalConnectionRequirementsProperty(
                     subnet_id=config["subnet_id_2"],
                     security_group_id_list=config["sg"],
-                    availability_zone="us-east-2b",
+                    availability_zone="us-east-1a",
                 ),
                 name="Redshift-Network",
             ),
