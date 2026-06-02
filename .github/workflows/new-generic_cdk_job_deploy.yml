@@ -79,7 +79,7 @@ jobs:
       AWSRoleToAssume: ${{ needs.set_access_permissions.outputs.OIDC_ROLE }}
       AWSRoleSessionName: gha-build-${{ inputs.deploy_environment }}
       outputArtifactUploadName: ${{ inputs.deploy_environment }}-infra
-
+      stackName: ${{ inputs.stack_name }}
       inputArtifactPath: ${{ inputs.inputArtifactPath }}
       inputArtifactDownloadName: ${{ inputs.inputArtifactDownloadName }}
       AWSRegion: ${{ inputs.aws_region }}
