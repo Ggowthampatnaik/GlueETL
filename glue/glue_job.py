@@ -1,6 +1,4 @@
 import sys
-import json
-import boto3
 
 from awsglue.utils import getResolvedOptions
 from pyspark.context import SparkContext
@@ -12,7 +10,10 @@ args = getResolvedOptions(
     sys.argv,
     [
         "JOB_NAME",
-        "secret_id_rds",
+        "rds_endpoint",
+        "db_name",
+        "db_username",
+        "db_password",
         "db_table",
         "output_path"
     ]
@@ -27,42 +28,16 @@ job.init(args["JOB_NAME"], args)
 
 print("Glue Job Started")
 
-def establish_connection_rds():
-    print("Getting RDS secret", flush=True)
+jdbc_url = (
+    f"jdbc:mysql://{args['rds_endpoint']}:3306/"
+    f"{args['db_name']}?useSSL=false"
+)
 
-    secret_id = args["secret_id_rds"]
-
-    sm_client = boto3.client("secretsmanager")
-    response = sm_client.get_secret_value(SecretId=secret_id)
-
-    print("Secret retrieved", flush=True)
-
-    values = json.loads(response["SecretString"])
-
-    host = values["host"]
-    port = values["port"]
-    dbname = values["dbname"]
-    username = values["username"]
-    password = values["password"]
-
-    jdbc_url = (
-        f"jdbc:mysql://{host}:{port}/{dbname}"
-        "?useSSL=false"
-        "&connectTimeout=10000"
-        "&socketTimeout=30000"
-    )
-
-    connection_properties = {
-        "user": username,
-        "password": password,
-        "driver": "com.mysql.cj.jdbc.Driver"
-    }
-
-    print("JDBC URL created", flush=True)
-
-    return jdbc_url, connection_properties
-
-jdbc_url, connection_properties = establish_connection_rds()
+connection_properties = {
+    "user": args["db_username"],
+    "password": args["db_password"],
+    "driver": "com.mysql.cj.jdbc.Driver"
+}
 
 print("Reading MySQL table")
 
