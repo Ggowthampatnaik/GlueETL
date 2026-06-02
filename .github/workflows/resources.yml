@@ -1,5 +1,9 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: Glue Job resource for RDS to S3 extraction
+Parameters:
+  DbPassword:
+    Type: String
+    NoEcho: true
 
 Mappings:
   EnvironmentMapping:
@@ -37,9 +41,13 @@ Resources:
 
       DefaultArguments:
         "--job-language": "python"
-        "--secret_id_rds": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", SecretIdRds]
+        "--rds_endpoint": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", RdsEndpoint]
+        "--db_name": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbName]
+        "--db_username": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbUsername]
+        "--db_password": !Ref DbPassword
         "--db_table": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", DbTable]
         "--output_path": !FindInMap [EnvironmentMapping, !Ref "AWS::AccountId", OutputPath]
+
 
 Outputs:
   Environment:
