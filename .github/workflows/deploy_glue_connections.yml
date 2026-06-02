@@ -1,0 +1,128 @@
+name: Deploy Glue Connectors Stack
+
+on:
+  push:
+    branches:
+      - dev
+      - test
+      - main
+    paths:
+      - 'Common/iac/glue_connectors/connectors/glue_connectors_stack.py'
+      - 'Common/iac/glue_connectors/app.py'
+      - 'Common/iac/glue_connectors/cdk.json'
+
+  pull_request:
+    branches:
+      - dev
+      - test
+    paths:
+      - 'Common/iac/glue_connectors/connectors/glue_connectors_stack.py'
+      - 'Common/iac/glue_connectors/app.py'
+      - 'Common/iac/glue_connectors/cdk.json'
+
+  workflow_call:
+    inputs:
+      environment:
+        default: "dev"
+        description: which GH environment to use
+        type: string
+
+      region:
+        default: "us-east-2"
+        description: which region to deploy
+        type: string
+
+  workflow_dispatch:
+    inputs:
+      environment:
+        default: "dev"
+        description: which GH environment to use
+        type: choice
+        options:
+          - dev
+          - test
+          - prod
+
+      region:
+        default: "us-east-2"
+        description: which region to deploy
+        type: choice
+        options:
+          - us-east-1
+          - us-east-2
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  # Environment determines the OIDC_ROLE.
+  #
+  # This workflow file sets the value of the ENVIRONMENT variable based on the current branch or pull request.
+  # If the branch is main, the environment is set to prod.
+  # If the branch is test, the environment is set to test.
+  # If the branch is dev, the environment is set to dev.
+  # If the branch is any other value, the environment is set to the base branch name.
+  # For a PR from dev against dev this would be dev.
+  # The ENVIRONMENT variable is used for GitHub repo variables for the target environment.
+  #
+  ENVIRONMENT: ${{ inputs.environment || github.ref_name == 'main' && 'prod' || github.ref_name == 'test' && 'test' || github.ref_name == 'dev' && 'dev' || github.event.pull_request.base.ref }}
+  AWS_REGION: ${{ inputs.region || 'us-east-2' }}
+  STACK_NAME: StoreOpsGlueConnectionsStack
+
+jobs:
+  set_deployment_environment:
+    runs-on: ubuntu-latest
+
+    outputs:
+      ENVIRONMENT: ${{ steps.assign_runner_variables.outputs.ENVIRONMENT }}
+      AWS_REGION: ${{ steps.assign_runner_variables.outputs.AWS_REGION }}
+      CDK_STACK_NAME: ${{ steps.assign_runner_variables.outputs.STACK_NAME }}
+
+    steps:
+      - name: Assign Runner Variables for Access in All Github Actions context
+        id: assign_runner_variables
+        run: |
+          echo "ENVIRONMENT=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "AWS_REGION=${AWS_REGION}" >> $GITHUB_OUTPUT
+          echo "CDK stack name being set: $STACK_NAME"
+          echo "STACK_NAME=$STACK_NAME" >> $GITHUB_OUTPUT
+
+  set_access_perm:
+    needs:
+      - set_deployment_environment
+
+    runs-on: ubuntu-latest
+    environment: ${{ needs.set_deployment_environment.outputs.ENVIRONMENT }}
+
+    outputs:
+      ENVIRONMENT: ${{ steps.assign_runner_variables.outputs.ENVIRONMENT }}
+      AWS_REGION: ${{ steps.assign_runner_variables.outputs.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ steps.assign_runner_variables.outputs.AWS_ACCOUNT_ID }}
+      OIDC_ROLE: ${{ steps.assign_runner_variables.outputs.OIDC_ROLE }}
+
+    steps:
+      - name: Assign Runner Variables for Access in All Github Actions context
+        id: assign_runner_variables
+        run: |
+          echo "ENVIRONMENT=${ENVIRONMENT}" >> $GITHUB_OUTPUT
+          echo "AWS_REGION=${AWS_REGION}" >> $GITHUB_OUTPUT
+          echo "AWS_ACCOUNT_ID=${{ vars.ACCOUNT_NUM }}" >> $GITHUB_OUTPUT
+          echo "OIDC_ROLE=${{ vars.OIDC_ROLE }}" >> $GITHUB_OUTPUT
+
+  deploy_glue_connectors_cdk_stack:
+    needs:
+      - set_deployment_environment
+
+    uses: ./.github/workflows/generic_cdk_deploy.yml
+
+    secrets: inherit
+
+    with:
+      deploy_environment: ${{ needs.set_deployment_environment.outputs.ENVIRONMENT }}
+      stack_name: ${{ needs.set_deployment_environment.outputs.CDK_STACK_NAME }}
+      aws_region: ${{ needs.set_deployment_environment.outputs.AWS_REGION }}
+      cdk_working_dir: "Common/iac/glue_connectors/"
+
+    strategy:
+      fail-fast: false
