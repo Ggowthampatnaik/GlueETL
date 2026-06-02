@@ -114,7 +114,7 @@ jobs:
     needs:
       - set_deployment_environment
 
-    uses: ./.github/workflows/generic_cdk_deploy.yml
+    uses: ./.github/workflows/new-generic_cdk_deploy.yml
 
     secrets: inherit
 
