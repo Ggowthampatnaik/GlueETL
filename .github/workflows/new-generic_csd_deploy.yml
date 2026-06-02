@@ -1,0 +1,111 @@
+name: Deploy storeops cdk app
+
+on:
+  workflow_call:
+    inputs:
+      deploy_environment:
+        default: dev
+        description: which GH environment to use
+        type: string
+        required: true
+
+      stack_name:
+        default: dev
+        description: what is the stack name
+        type: string
+        required: true
+
+      aws_region:
+        default: us-east-1
+        description: which aws region to deploy to
+        type: string
+        required: false
+
+      cdk_working_dir:
+        default: Common/iac
+        description: which directory to run the cdk commands in
+        type: string
+        required: false
+
+      # Artifacts (lambda build) - these are the artifacts that are passed between the jobs
+      inputArtifactPath:
+        default: ./artifact
+        description: Where to store the downloaded artifact, relative to the working directory (Common/iac)
+        type: string
+
+      inputArtifactDownloadName:
+        description: Name of the artifact to download
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  set_access_permissions:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deploy_environment }}
+
+    outputs:
+      ENVIRONMENT: ${{ steps.assign_runner_variables.outputs.ENVIRONMENT }}
+      AWS_REGION: ${{ steps.assign_runner_variables.outputs.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ steps.assign_runner_variables.outputs.AWS_ACCOUNT_ID }}
+      OIDC_ROLE: ${{ steps.assign_runner_variables.outputs.OIDC_ROLE }}
+
+    steps:
+      - name: Assign Runner Variables for Access in All Github Actions context
+        id: assign_runner_variables
+        run: |
+          echo "ENVIRONMENT=${{ inputs.deploy_environment }}" >> $GITHUB_OUTPUT
+          echo "AWS_REGION=${{ inputs.aws_region }}" >> $GITHUB_OUTPUT
+          echo "AWS_ACCOUNT_ID=${{ vars.ACCOUNT_NUM }}" >> $GITHUB_OUTPUT
+          echo "OIDC_ROLE=${{ vars.OIDC_ROLE }}" >> $GITHUB_OUTPUT
+
+  build_cdk:
+    needs:
+      - set_access_permissions
+
+    uses: Signet-sd/CICD-Templates/.github/workflows/AgnosticCDKSynth.yml@v10.0.0
+
+    with:
+      environment: ${{ inputs.deploy_environment }}
+      workingDirectory: ${{ inputs.cdk_working_dir }}
+      AWSRoleToAssume: ${{ needs.set_access_permissions.outputs.OIDC_ROLE }}
+      AWSRoleSessionName: gha-build-${{ inputs.deploy_environment }}
+      outputArtifactUploadName: ${{ inputs.deploy_environment }}-infra
+      stackName: ${{ inputs.stack_name }}
+      inputArtifactPath: ${{ inputs.inputArtifactPath }}
+      inputArtifactDownloadName: ${{ inputs.inputArtifactDownloadName }}
+
+      installCommand: |
+        export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+          --domain signet-common \
+          --domain-owner 354008749183 \
+          --region us-east-2 \
+          --query authorizationToken \
+          --output text)
+
+        pip install -r requirements.txt
+
+      synthArgs: "-c env=${{ inputs.deploy_environment }}"
+
+    secrets:
+      githubArtifactToken: ${{ secrets.COMMON_CONSTRUCTS_PULL_KEY }}
+      githubToken: ${{ secrets.PULL_REPOSITORY_PAT }}
+      orcaSecurityApiToken: ${{ secrets.ORCA_SECURITY_API_TOKEN }}
+      orcaProjectKey: ${{ secrets.ORCA_PROJECT_KEY }}
+
+  deploy_cdk:
+    needs:
+      - set_access_permissions
+      - build_cdk
+
+    uses: Signet-sd/CICD-Templates/.github/workflows/cdkDeploy.yml@v10.1.0
+
+    with:
+      environment: ${{ inputs.deploy_environment }}
+      AWSRoleToAssume: ${{ needs.set_access_permissions.outputs.OIDC_ROLE }}
+      AWSRoleSessionName: gha-deploy-${{ inputs.deploy_environment }}
+      cdkVersion: 2.x
+      inputArtifactDownloadName: ${{ inputs.deploy_environment }}-infra
+      deployArgs: ${{ inputs.stack_name != '' && inputs.stack_name || '--all' }}
