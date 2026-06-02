@@ -77,7 +77,8 @@ jobs:
       stackName: ${{ inputs.stack_name }}
       inputArtifactPath: ${{ inputs.inputArtifactPath }}
       inputArtifactDownloadName: ${{ inputs.inputArtifactDownloadName }}
-
+      AWSRegion: ${{ inputs.aws_region }}
+      nodeVersion: 22
       installCommand: |
         pip install -r requirements.txt
 
