@@ -79,13 +79,6 @@ jobs:
       inputArtifactDownloadName: ${{ inputs.inputArtifactDownloadName }}
 
       installCommand: |
-        export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
-          --domain signet-common \
-          --domain-owner 354008749183 \
-          --region us-east-2 \
-          --query authorizationToken \
-          --output text)
-
         pip install -r requirements.txt
 
       synthArgs: "-c env=${{ inputs.deploy_environment }}"
