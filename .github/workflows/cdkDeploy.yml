@@ -1,0 +1,100 @@
+name: CDK Deploy
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+
+      AWSRoleToAssume:
+        type: string
+        required: true
+
+      AWSRegion:
+        type: string
+        default: us-east-1
+
+      AWSRoleDurationSeconds:
+        type: string
+        default: "900"
+
+      AWSRoleSessionName:
+        type: string
+        default: github-cdk-deploy
+
+      AWSMaskAccountId:
+        type: boolean
+        default: false
+
+      nodeVersion:
+        type: string
+        default: "22"
+
+      cdkVersion:
+        type: string
+        default: "2.x"
+
+      inputArtifactDownloadName:
+        type: string
+        required: true
+
+      deployArgs:
+        type: string
+        required: false
+        default: ""
+
+      stackName:
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+env:
+  GH_RUN_NUM: ${{ github.run_number }}
+  ENVIRONMENT: ${{ inputs.environment }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        if: ${{ inputs.AWSRoleToAssume }}
+        with:
+          aws-region: ${{ inputs.AWSRegion }}
+          role-duration-seconds: ${{ inputs.AWSRoleDurationSeconds }}
+          role-session-name: ${{ inputs.AWSRoleSessionName }}
+          role-to-assume: ${{ inputs.AWSRoleToAssume }}
+          mask-aws-account-id: ${{ inputs.AWSMaskAccountId }}
+
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.inputArtifactDownloadName }}
+          path: ./artifact
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.nodeVersion }}
+
+      - name: Install CDK
+        run: npm i -g aws-cdk@${{ inputs.cdkVersion }}
+
+      - name: List artifact files
+        run: ls -R ./artifact
+
+      - name: Deploy
+        run: |
+          cdk deploy \
+            --app ./artifact \
+            --require-approval never \
+            ${{ inputs.deployArgs }} \
+            ${{ inputs.stackName }}
