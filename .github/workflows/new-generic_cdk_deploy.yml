@@ -80,6 +80,13 @@ jobs:
       AWSRegion: ${{ inputs.aws_region }}
       nodeVersion: 22
       installCommand: |
+        export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token \
+          --domain glue-common \
+          --domain-owner 061578311583 \
+          --region us-east-1 \
+          --query authorizationToken \
+          --output text)
+      
         pip install -r requirements.txt
 
       synthArgs: "-c env=${{ inputs.deploy_environment }}"
