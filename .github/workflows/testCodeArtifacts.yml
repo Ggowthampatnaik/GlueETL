@@ -1,0 +1,43 @@
+name: List CodeArtifact Resources
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  list-codeartifact:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configure AWS credentials using OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::061578311583:role/github-glue-role
+          aws-region: us-east-1
+
+      - name: List CodeArtifact domains and repositories
+        shell: bash
+        run: |
+          echo "=== CodeArtifact Domains ==="
+
+          DOMAINS=$(aws codeartifact list-domains \
+            --query 'domains[*].name' \
+            --output text)
+
+          if [ -z "$DOMAINS" ]; then
+            echo "No CodeArtifact domains found."
+            exit 0
+          fi
+
+          for DOMAIN in $DOMAINS; do
+            echo ""
+            echo "=== Domain: $DOMAIN ==="
+
+            aws codeartifact list-repositories-in-domain \
+              --domain "$DOMAIN" \
+              --query 'repositories[*].[name,administratorAccount]' \
+              --output table
+          done
